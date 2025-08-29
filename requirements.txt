@@ -6,7 +6,8 @@ hydra-core
 jaxtyping
 librosa
 matplotlib
-numpy
+pyworld
+numpy==2.2.6
 omegaconf
 Pillow
 praat-parselmouth

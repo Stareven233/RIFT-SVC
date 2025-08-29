@@ -1,3 +1,25 @@
+r'''
+
+
+
+
+多试几首歌，水群交流来确定是否好用 （当前感觉跟ddsp差不太多，训练慢一些，但音色泄露没那么严重
+用上各种奇技淫巧再次训练
+
+
+
+cd D:\Code\projects\RIFT-SVC
+nvidia-smi
+
+$model = "ckpts/fritia/model-step=10000.ckpt"
+$indir = "D:\Document\ai-sings\LETTER"
+$filename = "咪咕音乐-6005970A0NP_Vocals_vocals_noreverb.flac"
+$key=0
+
+& uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 6 -k $key
+& uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.1 --spk-cfg-strength 0.2 --skip-cfg-strength 0.1 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
+'''
+
 import click
 import librosa
 import numpy as np
@@ -7,6 +29,7 @@ import torchaudio
 from pathlib import Path
 from tqdm import tqdm
 from torch.amp import autocast
+import re
 
 from rift_svc import DiT, RF
 from rift_svc.feature_extractors import HubertModelWithFinalProj, RMSExtractor, get_mel_spectrogram
@@ -17,6 +40,9 @@ from slicer import Slicer
 
 
 torch.set_grad_enabled(False)
+
+
+step_patten = re.compile(r'(?<=model-step\=)\d+')  # model-step=180000.ckpt
 
 
 def extract_state_dict(ckpt):
@@ -457,11 +483,11 @@ def pad_tensor_to_length(tensor, length):
 
 
 @click.command()
-@click.option('--model', type=click.Path(exists=True), required=True, help='Path to model checkpoint')
-@click.option('--input', type=click.Path(exists=True), required=True, help='Input audio file')
-@click.option('--output', type=click.Path(), required=True, help='Output audio file')
-@click.option('--speaker', type=str, required=True, help='Target speaker')
-@click.option('--key-shift', type=int, default=0, help='Pitch shift in semitones')
+@click.option('-m', '--model', type=click.Path(exists=True), required=True, help='Path to model checkpoint')
+@click.option('-i', '--in_file', type=click.Path(exists=True), required=True, help='Input audio file')
+@click.option('-o', '--out_file', type=click.Path(), required=False, help='Output audio file')
+@click.option('-s', '--speaker', type=str, required=True, help='Target speaker')
+@click.option('-k', '--key-shift', type=int, default=0, help='Pitch shift in semitones')
 @click.option('--device', type=str, default=None, help='Device to use (cuda/cpu)')
 @click.option('--infer-steps', type=int, default=32, help='Number of inference steps')
 @click.option('--ds-cfg-strength', type=float, default=0.0, help='Downsampled content vector guidance strength')
@@ -480,11 +506,11 @@ def pad_tensor_to_length(tensor, length):
 @click.option('--slicer-hop-size', type=int, default=10, help='Hop size for audio slicing in milliseconds')
 @click.option('--slicer-max-sil-kept', type=int, default=200, help='Maximum silence kept in milliseconds')
 @click.option('--use-fp16', is_flag=True, default=True, help='Use float16 precision for faster inference')
-@click.option('--batch-size', type=int, default=1, help='Batch size for parallel inference')
+@click.option('-bs', '--batch-size', type=int, default=1, help='Batch size for parallel inference')
 def main(
     model,
-    input,
-    output,
+    in_file,
+    out_file,
     speaker,
     key_shift,
     device,
@@ -523,7 +549,8 @@ def main(
     hop_length = 512
     sample_rate = 44100
 
-    audio = load_audio(input, sample_rate)
+    in_file = Path(in_file)
+    audio = load_audio(in_file, sample_rate)
 
     slicer = Slicer(
         sr=sample_rate,
@@ -575,9 +602,17 @@ def main(
     result_audio = result_audio[:len(audio)]
 
     click.echo("Saving output...")
-    output_path = Path(output)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    torchaudio.save(output, torch.from_numpy(result_audio).unsqueeze(0), sample_rate)
+    if out_file is not None:
+        out_file = Path(out_file)
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        *_, ckpt = model.split('/')  # ckpts/fritia/model-step=10000.ckpt
+        m = step_patten.search(ckpt)
+        assert m is not None
+        meta = int(m.group(0)) / 1000
+        meta = f'rift@{speaker}_{meta}ks_{key_shift}k'
+        out_file = in_file.parent / f'{in_file.stem}_{meta}.flac'
+    torchaudio.save(out_file, torch.from_numpy(result_audio).unsqueeze(0), sample_rate)
     click.echo("Done!")
 
 

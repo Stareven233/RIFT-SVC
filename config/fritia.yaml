@@ -1,0 +1,42 @@
+# model
+# dim-depth
+
+seed: 233
+
+defaults:
+  - _self_
+  - model: dit-768-12
+
+dataset:
+  data_dir: data
+  meta_info_path: data/meta_info.json
+  max_frame_len: 256
+
+training:
+  # optimizer_type: adamwsf; learning_rate: 5e-5; weight_decay: 0.01; batch_size_per_gpu: 32; warmup_ratio: 0.05
+  # 6000步就差不多了
+  run_name: fritia
+  optimizer_type: adamwsf
+  learning_rate: 5e-5
+  betas: (0.9, 0.95)
+  weight_decay: 0.01
+  batch_size_per_gpu: 32
+  grad_accumulation_steps: 1
+  max_grad_norm: 0
+  max_steps: 15000
+  warmup_ratio: 0.05
+  save_per_steps: 1000
+  test_per_steps: 2000
+  log_media_per_steps: 2000
+  num_workers: 4
+  log_every_n_steps: 10
+  resume_from_checkpoint: ckpts/fritia/last.ckpt
+  # pretrained_path: pretrained/pretrain-v3_dit-768-12.ckpt
+  # save_weights_only: false
+  save_weights_only: true
+  eval_sample_steps: 32
+  drop_spk_prob: 0.0
+  time_schedule: lognorm
+  # Logger options
+  logger: tensorboard  # Options: "wandb" or "tensorboard"
+  wandb_project: RIFT-SVC-FT

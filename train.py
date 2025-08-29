@@ -1,3 +1,33 @@
+r'''
+https://github.com/Pur1zumu/RIFT-SVC
+pip install torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu118
+cd D:\Code\projects\RIFT-SVC
+uv add pyworld
+uv add numpy==2.2.6
+New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\rmvpe\model.pt" -Target "D:\Code\projects\DDSP-SVC\pretrain\rmvpe\model.pt"
+
+!这个项目不需要提前切片，会在训练时随机借助python序列的slice功能切
+
+$DATA_DIR="data"
+& uv run scripts/resample_normalize_audios.py --src $DATA_DIR
+& uv run scripts/prepare_data_meta.py --data-dir $DATA_DIR
+& uv run scripts/prepare_mel.py --data-dir $DATA_DIR --num-workers 2
+& uv run scripts/prepare_rms.py --data-dir $DATA_DIR --num-workers 2
+& uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 2
+& uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 2
+
+cd D:\Code\projects\RIFT-SVC
+uv run train.py --config-name fritia
+
+tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
+
+#todo
+mulk
+换成pc-HifiGAN
+换上moun
+换上自己的lr调度器
+'''
+
 import os
 import hydra
 import pytorch_lightning as pl
@@ -137,7 +167,7 @@ def main(cfg: DictConfig):
         check_val_every_n_epoch=None,
         gradient_clip_val=cfg.training.max_grad_norm,
         gradient_clip_algorithm='norm',
-        log_every_n_steps=1,
+        log_every_n_steps=cfg.training.log_every_n_steps,
     )
 
     if hasattr(optimizer, 'train'):
@@ -158,6 +188,7 @@ def main(cfg: DictConfig):
             val_dataset,
             batch_size=cfg.training.batch_size_per_gpu,
             num_workers=cfg.training.num_workers,
+            persistent_workers=True,
             collate_fn=collate_fn,
         ),
         ckpt_path=cfg.training.get('resume_from_checkpoint', None),
