@@ -17,12 +17,14 @@ $DATA_DIR="data"
 & uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 2
 
 cd D:\Code\projects\RIFT-SVC
-uv run train.py --config-name fritia
+$name="fritia"
+uv run train.py training.run_name=$name
+uv run train.py training.run_name=$name training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
+uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/last.ckpt
 
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
 #todo
-mulk
 换成pc-HifiGAN
 换上moun
 换上自己的lr调度器
@@ -46,7 +48,7 @@ from rift_svc.optim import get_optimizer
 torch.set_float32_matmul_precision('high')
 
 
-@hydra.main(version_base=None, config_path="config", config_name="config")
+@hydra.main(version_base=None, config_path='config', config_name='noe')
 def main(cfg: DictConfig):
     pl.seed_everything(cfg.seed)
 
