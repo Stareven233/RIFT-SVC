@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 from jaxtyping import Bool, Int
 from PIL import Image
-from pytorch_lightning.callbacks import TQDMProgressBar
+from pytorch_lightning import callbacks
 import parselmouth as pm
 import librosa
 import pyworld as pw
@@ -310,7 +310,7 @@ def f0_ensemble_light(rmvpe_f0, pw_f0, pmac_f0, rms=None, rms_threshold=0.05):
 
 # progress bar helper
 
-class CustomProgressBar(TQDMProgressBar):
+class CustomProgressBar(callbacks.TQDMProgressBar):
     def __init__(self):
         super().__init__()
         self.start_time = None
@@ -352,6 +352,20 @@ class CustomProgressBar(TQDMProgressBar):
             "elapsed_time": elapsed_time_str + "/" + remaining_time_str,
             "remaining_steps": str(remaining_steps) + "/" + str(total_steps)
         })
+
+
+class ModelCheckpoint2(callbacks.ModelCheckpoint):
+    """在训练中断时保存模型，可选是否保存优化器参数"""
+    
+    def __init__(self, dirpath = None, filename = None, monitor = None, verbose = False, save_last = None, save_top_k = 1, save_on_exception = False, save_weights_only = False, mode = "min", auto_insert_metric_name = True, every_n_train_steps = None, train_time_interval = None, every_n_epochs = None, save_on_train_epoch_end = None, enable_version_counter = True):
+        super().__init__(dirpath, filename, monitor, verbose, save_last, save_top_k, save_on_exception, save_weights_only, mode, auto_insert_metric_name, every_n_train_steps, train_time_interval, every_n_epochs, save_on_train_epoch_end, enable_version_counter)
+
+    def on_exception(self, trainer, pl_module, exception):
+        t = self.save_weights_only
+        self.save_weights_only = True
+        ret = super().on_exception(trainer, pl_module, exception)
+        self.save_weights_only = t
+        return ret
 
 
 # state dict helpers

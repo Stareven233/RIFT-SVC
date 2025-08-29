@@ -33,14 +33,14 @@ import hydra
 import pytorch_lightning as pl
 import torch
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from torch.utils.data import DataLoader
 
 from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
 from rift_svc.lightning_module import RIFTSVCLightningModule
-from rift_svc.utils import CustomProgressBar, load_state_dict
+from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, load_state_dict
 from rift_svc.optim import get_optimizer
 
 torch.set_float32_matmul_precision('high')
@@ -110,11 +110,12 @@ def main(cfg: DictConfig):
         cfg=cfg_dict
     )
 
-    checkpoint_callback = ModelCheckpoint(
+    checkpoint_callback = ModelCheckpoint2(
         dirpath=os.path.join('ckpts', cfg.training.run_name),
         filename='model-{step}',
         save_top_k=-1,
         save_last='link',
+        save_on_exception=cfg.training.get('save_on_interruption', None),
         every_n_train_steps=cfg.training.save_per_steps,
         save_weights_only=cfg.training.save_weights_only,
     )
