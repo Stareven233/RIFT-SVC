@@ -24,20 +24,17 @@ import torchaudio
 from pathlib import Path
 from tqdm import tqdm
 from torch.amp import autocast
-import re
 
 from rift_svc import DiT, RF
 from rift_svc.feature_extractors import HubertModelWithFinalProj, RMSExtractor, get_mel_spectrogram
 from rift_svc.nsf_hifigan import NsfHifiGAN
 from rift_svc.rmvpe import RMVPE
 from rift_svc.utils import linear_interpolate_tensor, post_process_f0, f0_ensemble, f0_ensemble_light, get_f0_pw, get_f0_pm
+from rift_svc.utils import ckpt_step_patten
 from slicer import Slicer
 
 
 torch.set_grad_enabled(False)
-
-
-step_patten = re.compile(r'(?<=model-step\=)\d+')  # model-step=180000.ckpt
 
 
 def extract_state_dict(ckpt):
@@ -602,7 +599,7 @@ def main(
         out_file.parent.mkdir(parents=True, exist_ok=True)
     else:
         *_, ckpt = model.split('/')  # ckpts/fritia/model-step=10000.ckpt
-        m = step_patten.search(ckpt)
+        m = ckpt_step_patten.search(ckpt)
         assert m is not None
         meta = int(m.group(0)) / 1000
         meta = f'rift@{speaker}_{meta}ks_{key_shift}k'

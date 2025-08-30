@@ -27,8 +27,6 @@ uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$n
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
 #todo
-换上moun
-换上自己的lr调度器
 音区偏移
 '''
 
@@ -45,6 +43,7 @@ from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
 from rift_svc.lightning_module import RIFTSVCLightningModule
 from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, load_state_dict
+from rift_svc.utils import ckpt_step_patten
 from rift_svc.optim import get_optimizer
 
 torch.set_float32_matmul_precision('high')
@@ -94,6 +93,11 @@ def main(cfg: DictConfig):
         rf.transformer.freeze_adaln_and_tembed()
 
     warmup_steps = int(cfg.training.max_steps * cfg.training.warmup_ratio)
+    global_step = 0
+    if (ckpt := cfg.training.resume_from_checkpoint) is not None:
+        m = ckpt_step_patten.search(ckpt)
+        assert m is not None
+        global_step = int(m.group(0))
     optimizer, lr_scheduler = get_optimizer(
         cfg.training.optimizer_type,
         rf, 
@@ -103,6 +107,9 @@ def main(cfg: DictConfig):
         warmup_steps,
         max_steps=cfg.training.max_steps,
         min_lr=cfg.training.get('min_lr', 0.0),
+        decay_step=cfg.training.decay_step,
+        gamma=cfg.training.gamma,
+        global_step=global_step,
         lora_training=cfg.training.get('lora_training', False),
     )
     OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)

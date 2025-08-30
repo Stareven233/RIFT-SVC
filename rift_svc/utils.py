@@ -3,6 +3,7 @@ import os
 import random
 import time
 from typing import Any
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -376,3 +377,5 @@ def load_state_dict(model, state_dict, strict=False):
         # Remove 'model.' prefix
         state_dict = {k.replace('model.', ''): v for k, v in state_dict.items()}
     return model.load_state_dict(state_dict, strict=strict)
+
+ckpt_step_patten = re.compile(r'(?<=model-step\=)\d+')  # model-step=180000.ckpt

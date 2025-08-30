@@ -1,13 +1,15 @@
+import math
+from collections import defaultdict
+
 from schedulefree import AdamWScheduleFree
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import _LRScheduler
-import math
+
+from .muon_moonshot import get_params_for_muon, Muon
+from .lr_scheduler import warmup_stage_decay
+from .lr_scheduler import LinearWarmupDecayLR
 
 
-def get_optimizer(
-        optimizer_type, model, lr, betas, weight_decay, warmup_steps, 
-        lora_training=False, **kwargs):
-    from collections import defaultdict
+def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, lora_training=False, **kwargs):
     param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
     if not lora_training:
         specp_decay_params = defaultdict(list)
@@ -54,50 +56,13 @@ def get_optimizer(
         optimizer = AdamW(optim_groups, betas=betas, weight_decay=weight_decay)
         max_steps = kwargs['max_steps']
         min_lr = kwargs.get('min_lr', 0.0)
-        lr_scheduler = LinearWarmupDecayLR(optimizer, warmup_steps, max_steps, min_lr=min_lr)
-        return optimizer, lr_scheduler
+        scheduler = LinearWarmupDecayLR(optimizer, warmup_steps, max_steps, min_lr=min_lr)
+        return optimizer, scheduler
+    elif optimizer_type == 'moun':
+        pm, po = get_params_for_muon(model)
+        # 笨办法兼容optim_groups
+        optimizer = Muon(lr, weight_decay, pm, adamw_params=po, optim_groups=optim_groups)
+        scheduler = warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
+        return optimizer, scheduler
     else:
         raise ValueError(f"Invalid optimizer type: {optimizer_type}")
-
-
-class LinearWarmupDecayLR(_LRScheduler):
-    """
-    Linear learning rate scheduler with warmup and minimum lr.
-    
-    During warmup, the LR increases linearly from 0 to the base LR.
-    After warmup, the LR decays linearly from the base LR down to min_lr.
-    
-    Args:
-        optimizer (Optimizer): Wrapped optimizer.
-        warmup_steps (int): Number of steps to linearly increase LR.
-        total_steps (int): Total number of steps for training (warmup + decay).
-        min_lr (float): Minimum learning rate after decay.
-        last_epoch (int): The index of last epoch. Default: -1.
-    """
-    
-    def __init__(self, optimizer, warmup_steps, total_steps, min_lr=0.0, last_epoch=-1):
-        if total_steps <= warmup_steps:
-            raise ValueError(
-                "Total steps must be larger than warmup_steps for decay to happen."
-            )
-        self.warmup_steps = warmup_steps
-        self.total_steps = total_steps
-        self.min_lr = min_lr
-        super(LinearWarmupDecayLR, self).__init__(optimizer, last_epoch)
-
-    def get_lr(self):
-        """Compute learning rate using linear warmup and then linear decay."""
-        # Note: self.last_epoch is incremented by the base _LRScheduler.step() before calling get_lr().
-        if self.last_epoch < self.warmup_steps:
-            # Warmup phase: increase linearly from 0 (or a small value) to base_lr.
-            return [
-                base_lr * float(self.last_epoch + 1) / float(self.warmup_steps)
-                for base_lr in self.base_lrs
-            ]
-        else:
-            # Decay phase: decrease linearly from base_lr to min_lr.
-            progress = float(self.last_epoch - self.warmup_steps) / float(self.total_steps - self.warmup_steps)
-            return [
-                max(base_lr * (1.0 - progress) + self.min_lr * progress, self.min_lr)
-                for base_lr in self.base_lrs
-            ]
