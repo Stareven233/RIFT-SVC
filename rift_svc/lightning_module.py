@@ -12,8 +12,14 @@ from pytorch_lightning import LightningModule
 
 from rift_svc.metrics import mcd, psnr, si_snr
 from rift_svc.feature_extractors import get_mel_spectrogram
-from rift_svc.nsf_hifigan import NsfHifiGAN
+from rift_svc.nsf_hifigan import NsfHifiGAN, NsfHifiGANLog10
 from rift_svc.utils import draw_mel_specs, l2_grad_norm
+
+
+vocoder_cls_map = {
+    'nsf-hifigan': NsfHifiGAN,
+    'nsf-hifigan-log10': NsfHifiGANLog10
+}
 
 
 class RIFTSVCLightningModule(LightningModule):
@@ -29,15 +35,17 @@ class RIFTSVCLightningModule(LightningModule):
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
         self.cfg = cfg
-        self.eval_sample_steps = cfg['training']['eval_sample_steps']
+        self.eval_sample_steps = cfg.training.eval_sample_steps
         self.model.sample = partial(
             self.model.sample,
             steps=self.eval_sample_steps,
         )
-        self.log_media_per_steps = cfg['training']['log_media_per_steps']
-        self.drop_spk_prob = cfg['training']['drop_spk_prob']
-
-        self.vocoder = None
+        self.log_media_per_steps = cfg.training.log_media_per_steps
+        self.drop_spk_prob = cfg.training.drop_spk_prob
+        vocoder_cls = vocoder_cls_map.get(cfg.vocoder.type, None)
+        if vocoder_cls is None:
+            raise NotImplementedError(f'Unsupported vocoder type: {cfg.vocoder.type}')
+        self.vocoder = vocoder_cls(cfg.vocoder.ckpt)
         self.save_hyperparameters(ignore=['model', 'optimizer', 'vocoder'])
 
     def configure_optimizers(self):
@@ -89,12 +97,7 @@ class RIFTSVCLightningModule(LightningModule):
         if not self.trainer.is_global_zero:
             return
 
-        if self.vocoder is None:
-            self.vocoder =  NsfHifiGAN(
-                'pretrained/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt').to(self.device)
-        else:
-            self.vocoder = self.vocoder.to(self.device)
-        
+        self.vocoder = self.vocoder.to(self.device)
         self.mcd = []
         self.si_snr = []
         self.psnr = []

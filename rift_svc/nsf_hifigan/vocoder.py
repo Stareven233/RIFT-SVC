@@ -89,6 +89,9 @@ class NsfHifiGAN(torch.nn.Module):
                 self.h.hop_size, 
                 self.h.fmin, 
                 self.h.fmax)
+        print('| Load HifiGAN: ', self.model_path)
+        self.model, self.h = load_model(self.model_path, device=self.device)
+        exit()
     
     def sample_rate(self):
         return self.h.sampling_rate

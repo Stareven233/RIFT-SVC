@@ -5,6 +5,7 @@ cd D:\Code\projects\RIFT-SVC
 uv add pyworld
 uv add numpy==2.2.6
 New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\rmvpe\model.pt" -Target "D:\Code\projects\DDSP-SVC\pretrain\rmvpe\model.pt"
+New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\vocoder" -Target "D:\Code\projects\DDSP-SVC\pretrain\vocoder"
 
 !这个项目不需要提前切片，会在训练时随机借助python序列的slice功能切
 
@@ -20,14 +21,15 @@ cd D:\Code\projects\RIFT-SVC
 $name="fritia"
 uv run train.py training.run_name=$name
 uv run train.py training.run_name=$name training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
+uv run train.py training.run_name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/last.ckpt
 
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
 #todo
-换成pc-HifiGAN
 换上moun
 换上自己的lr调度器
+音区偏移
 '''
 
 import os
@@ -88,7 +90,7 @@ def main(cfg: DictConfig):
     if cfg.training.get('lora_training', False):
         rf.transformer.apply_lora(cfg.training.lora_rank, cfg.training.lora_alpha)
     
-    if cfg.training.get('freeze_adaln_and_tembed', False):
+    if cfg.training.get('freeze_adaln_and_tembed', True):
         rf.transformer.freeze_adaln_and_tembed()
 
     warmup_steps = int(cfg.training.max_steps * cfg.training.warmup_ratio)
@@ -103,13 +105,12 @@ def main(cfg: DictConfig):
         min_lr=cfg.training.get('min_lr', 0.0),
         lora_training=cfg.training.get('lora_training', False),
     )
-    cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    cfg_dict['spk2idx'] = train_dataset.spk2idx
+    OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
     model = RIFTSVCLightningModule(
         model=rf,
         optimizer=optimizer,
         lr_scheduler=lr_scheduler,
-        cfg=cfg_dict
+        cfg=cfg
     )
 
     checkpoint_callback = ModelCheckpoint2(
@@ -136,6 +137,7 @@ def main(cfg: DictConfig):
             id=cfg.training.get('wandb_resume_id', None),
             resume='allow',
         )
+        cfg_dict = OmegaConf.to_container(cfg, resolve=True)
         if logger.experiment.config:
             # Merge with existing config, giving priority to existing values
             logger.experiment.config.update(cfg_dict, allow_val_change=True)

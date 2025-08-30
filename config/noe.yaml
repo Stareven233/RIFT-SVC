@@ -12,6 +12,11 @@ dataset:
   meta_info_path: data/meta_info.json
   max_frame_len: 256
 
+vocoder:
+  type: nsf-hifigan
+  # ckpt: pretrained/vocoder/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
+  ckpt: pretrained/vocoder/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt
+
 training:
   # optimizer_type: adamwsf; learning_rate: 5e-5; weight_decay: 0.01; batch_size_per_gpu: 32; warmup_ratio: 0.05
   # 6000步就差不多了
