@@ -19,11 +19,9 @@ class DotDict(dict):
     __delattr__ = dict.__delitem__
 
 
-def load_model_vocoder(
-        model_path,
-        device='cpu'):
-    config_file = os.path.join(os.path.split(model_path)[0], 'config.yaml')
-    with open(config_file, "r") as config:
+def load_model_vocoder(model_path, device='cpu'):
+    config_file = model_path.parent / 'config.yaml'
+    with config_file.open('r', encoding='utf-8') as config:
         args = yaml.safe_load(config)
     args = DotDict(args)
 
@@ -89,9 +87,6 @@ class NsfHifiGAN(torch.nn.Module):
                 self.h.hop_size, 
                 self.h.fmin, 
                 self.h.fmax)
-        print('| Load HifiGAN: ', self.model_path)
-        self.model, self.h = load_model(self.model_path, device=self.device)
-        exit()
     
     def sample_rate(self):
         return self.h.sampling_rate

@@ -30,7 +30,7 @@ tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 音区偏移
 '''
 
-import os
+from pathlib import Path
 import hydra
 import pytorch_lightning as pl
 import torch
@@ -120,8 +120,11 @@ def main(cfg: DictConfig):
         cfg=cfg
     )
 
+    run_name = cfg.training.run_name
+    ckpt_dir = Path('ckpt', run_name)
+    OmegaConf.save(cfg, ckpt / 'config.yaml', resolve=True)
     checkpoint_callback = ModelCheckpoint2(
-        dirpath=os.path.join('ckpts', cfg.training.run_name),
+        dirpath=ckpt_dir,
         filename='model-{step}',
         save_top_k=-1,
         save_last='link',
@@ -132,9 +135,8 @@ def main(cfg: DictConfig):
 
     # Logger selection based on config
     logger_type = cfg.training.get('logger', 'wandb').lower()
-    run_name = cfg.training.run_name
     # Update checkpoint directory to use run_name
-    checkpoint_callback.dirpath = os.path.join('ckpts', run_name)
+    checkpoint_callback.dirpath = ckpt_dir
     
     if logger_type == 'wandb':
         # Use Weights & Biases logger
@@ -153,7 +155,7 @@ def main(cfg: DictConfig):
             logger.experiment.config.update(cfg_dict)
     elif logger_type == 'tensorboard':
         # Use TensorBoard logger
-        tensorboard_log_dir = os.path.join('logs', run_name)
+        tensorboard_log_dir = Path('logs', run_name)
         logger = TensorBoardLogger(
             save_dir=tensorboard_log_dir,
             name=None,  # Use the directory as is without adding another subfolder

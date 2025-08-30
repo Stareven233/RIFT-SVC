@@ -27,7 +27,7 @@ from torch.amp import autocast
 
 from rift_svc import DiT, RF
 from rift_svc.feature_extractors import HubertModelWithFinalProj, RMSExtractor, get_mel_spectrogram
-from rift_svc.nsf_hifigan import NsfHifiGAN
+from rift_svc.nsf_hifigan.vocoder import load_model_vocoder
 from rift_svc.rmvpe import RMVPE
 from rift_svc.utils import linear_interpolate_tensor, post_process_f0, f0_ensemble, f0_ensemble_light, get_f0_pw, get_f0_pm
 from rift_svc.utils import ckpt_step_patten
@@ -54,6 +54,7 @@ def load_models(model_path, device, use_fp16=True):
     """Load all required models and return them"""
     click.echo("Loading models...")
     
+    model_path = Path(model_path)
     ckpt = torch.load(model_path, map_location='cpu')
     state_dict, spk2idx, dit_cfg, dataset_cfg = extract_state_dict(ckpt)
 
@@ -66,8 +67,8 @@ def load_models(model_path, device, use_fp16=True):
         svc_model = svc_model.half()
     
     svc_model.eval()
-    
-    vocoder = NsfHifiGAN('pretrained/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt').to(device)
+    vocoder, args = load_model_vocoder(model_path, device)
+    vocoder = vocoder.vocoder
     rmvpe = RMVPE(model_path="pretrained/rmvpe/model.pt", hop_length=160, device=device)
     hubert = HubertModelWithFinalProj.from_pretrained("pretrained/content-vec-best").to(device)
     rms_extractor = RMSExtractor().to(device)
