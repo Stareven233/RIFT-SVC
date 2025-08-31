@@ -363,7 +363,7 @@ class ModelCheckpoint2(callbacks.ModelCheckpoint):
 
     def on_exception(self, trainer, pl_module, exception):
         t = self.save_weights_only
-        self.save_weights_only = True
+        self.save_weights_only = False
         ret = super().on_exception(trainer, pl_module, exception)
         self.save_weights_only = t
         return ret

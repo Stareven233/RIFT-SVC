@@ -36,7 +36,7 @@ def get_params_for_muon(model: nn.Module):
 # This code snippet is a modified version adapted from the following GitHub repository:
 # https://github.com/KellerJordan/Muon/blob/master/muon.py
 # 需pytorch>2.7&安装triton@https://github.com/woct0rdho/triton-windows uv add "triton-windows<3.4"
-@torch.compile
+# @torch.compile
 def zeropower_via_newtonschulz5(G, steps):
   """https://github.com/MoonshotAI/Moonlight/blob/master/examples/toy_train.py#L49
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a

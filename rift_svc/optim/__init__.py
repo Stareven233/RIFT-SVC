@@ -5,8 +5,7 @@ from schedulefree import AdamWScheduleFree
 from torch.optim import AdamW
 
 from .muon_moonshot import get_params_for_muon, Muon
-from .lr_scheduler import warmup_stage_decay
-from .lr_scheduler import LinearWarmupDecayLR
+from . import lr_scheduler
 
 
 def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, lora_training=False, **kwargs):
@@ -49,6 +48,12 @@ def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, 
             {'params': lora_a_or_spk_embed_params, 'weight_decay': weight_decay, 'lr': lr},
             {'params': lora_b_params, 'weight_decay': weight_decay, 'lr': lr*math.sqrt(dim/rank)}
         ]
+    
+    if kwargs.get('global_step', -1) != -1:
+        # resuming an optimizer
+        for g in optim_groups:
+            g['initial_lr'] = g['lr']
+
     if optimizer_type == 'adamwsf':
         optimizer = AdamWScheduleFree(optim_groups, betas=betas, warmup_steps=warmup_steps)
         return optimizer, None
@@ -56,13 +61,15 @@ def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, 
         optimizer = AdamW(optim_groups, betas=betas, weight_decay=weight_decay)
         max_steps = kwargs['max_steps']
         min_lr = kwargs.get('min_lr', 0.0)
-        scheduler = LinearWarmupDecayLR(optimizer, warmup_steps, max_steps, min_lr=min_lr)
+        scheduler = lr_scheduler.LinearWarmupDecayLR(optimizer, warmup_steps, max_steps, min_lr=min_lr)
         return optimizer, scheduler
     elif optimizer_type == 'moun':
         pm, po = get_params_for_muon(model)
         # 笨办法兼容optim_groups
+        warmup_ratio = warmup_steps / kwargs['max_steps']
         optimizer = Muon(lr, weight_decay, pm, adamw_params=po, optim_groups=optim_groups)
-        scheduler = warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
+        # scheduler = lr_scheduler.cosine_annealing(optimizer, lr, kwargs['max_steps'], warmup_ratio, decay_rate=kwargs['gamma'])
+        scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
         return optimizer, scheduler
     else:
         raise ValueError(f"Invalid optimizer type: {optimizer_type}")

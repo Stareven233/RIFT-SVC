@@ -18,11 +18,12 @@ $DATA_DIR="data"
 & uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 2
 
 cd D:\Code\projects\RIFT-SVC
-$name="fritia"
+$name="fritia-512"
 uv run train.py training.run_name=$name
-uv run train.py training.run_name=$name training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
+uv run train.py training.run_name=$name training.pretrained_path=ckpts/$name/model-step\=213.ckpt
+uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/model-step\=213.ckpt
+uv run train.py --config-name=noe-512 training.run_name=$name
 uv run train.py training.run_name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
-uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/last.ckpt
 
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
@@ -47,9 +48,13 @@ from rift_svc.utils import ckpt_step_patten
 from rift_svc.optim import get_optimizer
 
 torch.set_float32_matmul_precision('high')
+# from omegaconf.base import ContainerMetadata
+# import typing
+# from collections import defaultdict
+# torch.serialization.add_safe_globals([DictConfig, ContainerMetadata, typing.Any, dict, defaultdict])
 
 
-@hydra.main(version_base=None, config_path='config', config_name='noe')
+@hydra.main(version_base=None, config_path='config', config_name='noe-512')
 def main(cfg: DictConfig):
     pl.seed_everything(cfg.seed)
 
@@ -74,8 +79,10 @@ def main(cfg: DictConfig):
     )
 
     # Load pretrained weights if specified
-    if cfg.training.get('pretrained_path', None) is not None:
-        state_dict = torch.load(cfg.training.pretrained_path, map_location='cpu')
+    resume_ckpt = cfg.training.get('resume_from_checkpoint', None)
+    if resume_ckpt is None and cfg.training.get('pretrained_path', None) is not None:
+        state_dict = torch.load(cfg.training.pretrained_path, map_location='cpu', weights_only=False)
+        # print(f'{state_dict.keys()=}')  # (['epoch', 'global_step', 'pytorch-lightning_version', 'state_dict', 'loops', 'hparams_name', 'hyper_parameters'])
         if 'state_dict' in state_dict:
             state_dict = state_dict['state_dict']
         # Load only model weights, allowing mismatched keys for speaker embeddings
@@ -93,8 +100,8 @@ def main(cfg: DictConfig):
         rf.transformer.freeze_adaln_and_tembed()
 
     warmup_steps = int(cfg.training.max_steps * cfg.training.warmup_ratio)
-    global_step = 0
-    if (ckpt := cfg.training.resume_from_checkpoint) is not None:
+    global_step = -1
+    if (ckpt := cfg.training.get('resume_from_checkpoint', None)) is not None:
         m = ckpt_step_patten.search(ckpt)
         assert m is not None
         global_step = int(m.group(0))
@@ -121,8 +128,9 @@ def main(cfg: DictConfig):
     )
 
     run_name = cfg.training.run_name
-    ckpt_dir = Path('ckpt', run_name)
-    OmegaConf.save(cfg, ckpt / 'config.yaml', resolve=True)
+    ckpt_dir = Path('ckpts', run_name)
+    ckpt_dir.mkdir(exist_ok=True)
+    OmegaConf.save(cfg, ckpt_dir / 'config.yaml', resolve=True)
     checkpoint_callback = ModelCheckpoint2(
         dirpath=ckpt_dir,
         filename='model-{step}',
@@ -205,7 +213,7 @@ def main(cfg: DictConfig):
             persistent_workers=True,
             collate_fn=collate_fn,
         ),
-        ckpt_path=cfg.training.get('resume_from_checkpoint', None),
+        ckpt_path=resume_ckpt,
     )
 
 if __name__ == "__main__":

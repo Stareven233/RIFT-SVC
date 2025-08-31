@@ -98,7 +98,7 @@ def cosine_annealing(optimizer: Optimizer, max_lr: float, max_steps: int, warmup
   return scheduler
 
 
-def warmup_stable_decay(optimizer: Optimizer, max_steps: int, warmup_ratio=0, decay_ratio=0, **_):
+def warmup_stable_decay(optimizer: Optimizer, max_steps: int, warmup_ratio=0, decay_ratio=0.2, **_):
   # WSD策略（Warmup-Stable-Decay） @Scaling Laws and Compute-Optimal Training Beyond Fixed Training Durations
   n_warmup = max_steps * warmup_ratio
   n_decay = max_steps * decay_ratio  # n大于20k，可小于0.2
