@@ -6,6 +6,7 @@ import torch
 import torchaudio
 import click
 from functools import partial
+from tqdm import tqdm
 
 from multiprocessing_utils import run_parallel, get_device
 from rift_svc.feature_extractors import RMSExtractor
@@ -36,8 +37,8 @@ def process_rms(audio, data_dir, hop_length, verbose):
             click.echo(f"Skipping invalid entry: {audio}", err=True)
         return
 
-    wav_path = Path(data_dir) / speaker / f"{file_name}.wav"
-    rms_path = Path(data_dir) / speaker / f"{file_name}.rms.pt"
+    wav_path: Path = Path(data_dir) / speaker / file_name
+    rms_path = wav_path.with_suffix('.rms.pt')
 
     if not wav_path.is_file():
         if verbose:
@@ -50,7 +51,7 @@ def process_rms(audio, data_dir, hop_length, verbose):
         return
 
     try:
-        waveform, sr = torchaudio.load(str(wav_path))
+        waveform, sr = torchaudio.load(wav_path)
         extractor, device = get_rms_extractor(hop_length)
         waveform = waveform.to(device)
 
@@ -121,12 +122,20 @@ def generate_rms(data_dir, hop_length, num_workers, verbose):
         verbose=verbose
     )
 
-    run_parallel(
-        all_audios,
-        process_func,
-        num_workers=num_workers,
-        desc="Extracting RMS Energy"
-    )
+    if num_workers == 0:
+        tuple(tqdm(
+            (process_func(a) for a in all_audios),
+            total=len(all_audios),
+            desc='Extracting RMS Energy',
+            unit='file',
+        ))
+    else:
+        run_parallel(
+            all_audios,
+            process_func,
+            num_workers=num_workers,
+            desc="Extracting RMS Energy"
+        )
 
     click.echo("RMS energy extraction complete.")
 

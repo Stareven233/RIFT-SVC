@@ -7,6 +7,7 @@ import torch
 import torchaudio
 import click
 from functools import partial
+from tqdm import tqdm
 
 from rift_svc.feature_extractors import get_mel_spectrogram
 from multiprocessing_utils import run_parallel, get_device
@@ -24,8 +25,8 @@ def process_audio(audio, data_dir, hop_length, n_mel_channels, sample_rate, verb
             click.echo(f"Skipping invalid entry: {audio}", err=True)
         return
 
-    wav_path = Path(data_dir) / speaker / f"{file_name}.wav"
-    mel_path = Path(data_dir) / speaker / f"{file_name}.mel.pt"
+    wav_path: Path = Path(data_dir) / speaker / file_name
+    mel_path = wav_path.with_suffix('.mel.pt')
 
     if mel_path.is_file() and not overwrite:
         if verbose:
@@ -38,7 +39,7 @@ def process_audio(audio, data_dir, hop_length, n_mel_channels, sample_rate, verb
         return
 
     try:
-        waveform, sr = torchaudio.load(str(wav_path))
+        waveform, sr = torchaudio.load(wav_path)
         # Ensure the correct shape
         if len(waveform.shape) == 1:
             waveform = waveform.unsqueeze(0)
@@ -155,7 +156,15 @@ def generate_mel_specs(data_dir, hop_length, n_mel_channels, sample_rate, num_wo
         device=device
     )
 
-    run_parallel(all_audios, process_func, num_workers=num_workers, desc="Generating Mel Spectrograms")
+    if num_workers == 0:
+        tuple(tqdm(
+            (process_func(a) for a in all_audios),
+            total=len(all_audios),
+            desc='Generating Mel Spectrograms',
+            unit='file',
+        ))
+    else:
+        run_parallel(all_audios, process_func, num_workers=num_workers, desc="Generating Mel Spectrograms")
     click.echo("Mel spectrogram generation complete.")
 
 if __name__ == "__main__":

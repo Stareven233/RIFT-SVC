@@ -8,6 +8,7 @@ import torch
 import torchaudio
 from functools import partial
 import multiprocessing
+from tqdm import tqdm
 
 from multiprocessing_utils import run_parallel, get_device
 from rift_svc.rmvpe.inference import RMVPE
@@ -35,8 +36,8 @@ def process_f0(audio, data_dir, model_path, hop_length, sample_rate, overwrite, 
         if verbose:
             click.echo(f"Skipping invalid entry: {audio}")
         return
-    wav_path = Path(data_dir) / speaker / f"{file_name}.wav"
-    f0_path = Path(data_dir) / speaker / f"{file_name}.f0.pt"
+    wav_path: Path = Path(data_dir) / speaker / file_name
+    f0_path = wav_path.with_suffix('.f0.pt')
     
     if f0_path.is_file() and not overwrite:
         if verbose:
@@ -47,7 +48,7 @@ def process_f0(audio, data_dir, model_path, hop_length, sample_rate, overwrite, 
             click.echo(f"Warning: WAV file not found: {wav_path}")
         return
     try:
-        waveform, sr = torchaudio.load(str(wav_path))
+        waveform, sr = torchaudio.load(wav_path)
         model, device = get_f0_model(model_path)
         waveform = waveform.to(device)
 
@@ -161,12 +162,20 @@ def prepare_f0(data_dir, model_path, hop_length, sample_rate, num_workers, overw
         verbose=verbose
     )
 
-    run_parallel(
-        all_audios,
-        process_func,
-        num_workers=num_workers,
-        desc="Extracting f0"
-    )
+    if num_workers == 0:
+        tuple(tqdm(
+            (process_func(a) for a in all_audios),
+            total=len(all_audios),
+            desc='Extracting f0',
+            unit='file',
+        ))
+    else:
+        run_parallel(
+            all_audios,
+            process_func,
+            num_workers=num_workers,
+            desc="Extracting f0"
+        )
 
     click.echo("f0 extraction complete.")
 

@@ -23,8 +23,11 @@ from pathlib import Path
 
 import click
 
+sys.path.append(Path(__file__).parent.as_posix())
+from resample_normalize_audios import find_sf_audio_paths
 
-def gather_audio_files(data_dir):
+
+def gather_audio_files(data_dir: Path) -> dict[str, list[Path]]:
     """
     Traverse the data directory and map speakers to their corresponding audio files.
 
@@ -38,13 +41,13 @@ def gather_audio_files(data_dir):
     for speaker_dir in data_dir.iterdir():
         if speaker_dir.is_dir():
             speaker_id = speaker_dir.name
-            audio_files = sorted([file.stem for file in speaker_dir.glob('*.wav')])
+            audio_files = sorted(find_sf_audio_paths(speaker_dir))
             if audio_files:
                 speaker_to_files[speaker_id] = audio_files
     return speaker_to_files
 
 
-def perform_random_split(speaker_to_files, num_test, seed):
+def perform_random_split(speaker_to_files: dict[str, list[Path]], num_test, seed):
     """
     Perform a random split of the dataset into training and testing sets.
 
@@ -59,7 +62,7 @@ def perform_random_split(speaker_to_files, num_test, seed):
     all_files = []
     for speaker, files in speaker_to_files.items():
         for file in files:
-            all_files.append({"speaker": speaker, "file_name": file})
+            all_files.append({"speaker": speaker, "file_name": file.name})
 
     if num_test > len(all_files):
         click.echo(
@@ -77,7 +80,7 @@ def perform_random_split(speaker_to_files, num_test, seed):
     return train_audios, test_audios
 
 
-def perform_stratified_split(speaker_to_files, num_test_per_speaker, seed, only_include_speakers=None):
+def perform_stratified_split(speaker_to_files: dict[str, list[Path]], num_test_per_speaker, seed, only_include_speakers=None):
     """
     Perform a stratified split of the dataset into training and testing sets, ensuring each speaker has
     a specified number of testing samples.
@@ -118,7 +121,7 @@ def perform_stratified_split(speaker_to_files, num_test_per_speaker, seed, only_
         if any(excluded in speaker for excluded in excluded_speakers):
             # Assign all files to training set
             for file in files:
-                train_audios.append({"speaker": speaker, "file_name": file})
+                train_audios.append({"speaker": speaker, "file_name": file.name})
             continue  # Skip to the next speaker
 
         if len(files) < num_test_per_speaker:
@@ -132,12 +135,12 @@ def perform_stratified_split(speaker_to_files, num_test_per_speaker, seed, only_
 
         # Assign to testing set
         for file in test_files:
-            test_audios.append({"speaker": speaker, "file_name": file})
+            test_audios.append({"speaker": speaker, "file_name": file.name})
 
         # Assign remaining to train set
         for file in files:
             if file not in test_files:
-                train_audios.append({"speaker": speaker, "file_name": file})
+                train_audios.append({"speaker": speaker, "file_name": file.name})
 
     return train_audios, test_audios
 

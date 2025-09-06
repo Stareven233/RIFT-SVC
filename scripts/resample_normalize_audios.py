@@ -1,4 +1,3 @@
-import os
 import argparse
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -8,6 +7,7 @@ import resampy
 import numpy as np
 import pyloudnorm as pyln
 from tqdm import tqdm
+
 
 def process_audio_file(file_path, target_sample_rate, target_loudness, headroom=0.99):
     """
@@ -68,9 +68,10 @@ def process_audio_file(file_path, target_sample_rate, target_loudness, headroom=
     except Exception as e:
         return f"Error processing {file_path}: {e}"
 
-def gather_audio_files(source_root):
+
+def find_sf_audio_paths(source_root):
     """
-    Gathers all .wav audio files from the source directory.
+    Gathers all soundfile-supported audio files from the source directory.
 
     Parameters:
     - source_root (Path): Root directory of the source.
@@ -78,19 +79,14 @@ def gather_audio_files(source_root):
     Returns:
     - list of Path: List of audio file paths.
     """
-    audio_files = []
-    for dirpath, dirnames, filenames in os.walk(source_root):
-        current_path = Path(dirpath)
-
-        for file in filenames:
-            if file.lower().endswith('.wav'):
-                file_path = current_path / file
-                audio_files.append(file_path)
+    source_path = Path(source_root)
+    audio_files = [f for f in source_path.rglob('*') if f.suffix[1:].upper() in sf.available_formats()]
     return audio_files
+
 
 def resample_normalize_audios(source_root, target_sample_rate=44100, target_loudness=-18.0, headroom=0.99, max_workers=None):
     """
-    Resamples and normalizes loudness for all .wav audio files in the source directory.
+    Resamples and normalizes loudness for all soundfile-supported audio files in the source directory.
 
     Parameters:
     - source_root (str or Path): Path to the root of the source directory.
@@ -102,7 +98,7 @@ def resample_normalize_audios(source_root, target_sample_rate=44100, target_loud
     source_root = Path(source_root)
 
     # Gather all relevant audio files
-    audio_files = gather_audio_files(source_root)
+    audio_files = find_sf_audio_paths(source_root)
     total_files = len(audio_files)
 
     if total_files == 0:
@@ -130,6 +126,7 @@ def resample_normalize_audios(source_root, target_sample_rate=44100, target_loud
 
     print("Resampling and normalization complete.")
 
+
 def parse_arguments():
     """
     Parses command-line arguments.
@@ -151,6 +148,7 @@ def parse_arguments():
                         help='Maximum number of worker processes (default: number of CPUs).')
     
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_arguments()

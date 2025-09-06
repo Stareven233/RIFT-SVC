@@ -8,6 +8,7 @@ import click
 import torch
 import torchaudio
 from functools import partial
+from tqdm import tqdm
 
 from multiprocessing_utils import run_parallel, get_device
 from rift_svc.feature_extractors import HubertModelWithFinalProj
@@ -23,6 +24,7 @@ def roll_pad(wav, shift):
 
 CVEC_SAMPLE_RATE = 16000
 
+
 def get_cvec_model(model_path):
     """
     Lazy-load the HuBERT model, loading and caching it on its first invocation in each process.
@@ -36,6 +38,8 @@ def get_cvec_model(model_path):
         get_cvec_model.device = device
     return get_cvec_model.model, get_cvec_model.device
 
+
+@torch.no_grad()
 def process_cvec(audio, data_dir, model_path, overwrite, verbose):
     """
     Extract the content vector for a single audio file and save it as a .cvec.pt file.
@@ -47,8 +51,8 @@ def process_cvec(audio, data_dir, model_path, overwrite, verbose):
             click.echo(f"Skipping invalid entry: {audio}")
         return
     
-    wav_path = Path(data_dir) / speaker / f"{file_name}.wav"
-    cvec_path = Path(data_dir) / speaker / f"{file_name}.cvec.pt"
+    wav_path: Path = Path(data_dir) / speaker / file_name
+    cvec_path = wav_path.with_suffix('.cvec.pt')
     
     if cvec_path.is_file() and not overwrite:
         if verbose:
@@ -61,7 +65,7 @@ def process_cvec(audio, data_dir, model_path, overwrite, verbose):
         return
     
     try:
-        waveform, sr = torchaudio.load(str(wav_path))
+        waveform, sr = torchaudio.load(wav_path)
         model, device = get_cvec_model(model_path)
         waveform = waveform.to(device)
 
@@ -73,17 +77,16 @@ def process_cvec(audio, data_dir, model_path, overwrite, verbose):
         if sr != CVEC_SAMPLE_RATE:
             waveform = torchaudio.functional.resample(waveform, sr, CVEC_SAMPLE_RATE)
 
-        with torch.no_grad():
-            output = model(waveform)  # returns a dictionary containing "last_hidden_state"
-            cvec = output["last_hidden_state"].squeeze(0).cpu()
+        output = model(waveform)  # returns a dictionary containing "last_hidden_state"
+        cvec = output["last_hidden_state"].squeeze(0).cpu()
 
-            # Process the shifted waveform
-            waveform_shifted = roll_pad(waveform, -160)
-            output_shifted = model(waveform_shifted)
-            cvec_shifted = output_shifted["last_hidden_state"].squeeze(0).cpu()
+        # Process the shifted waveform
+        waveform_shifted = roll_pad(waveform, -160)
+        output_shifted = model(waveform_shifted)
+        cvec_shifted = output_shifted["last_hidden_state"].squeeze(0).cpu()
 
-            n, d = cvec.shape
-            cvec = torch.stack([cvec, cvec_shifted], dim=1).view(n * 2, d)
+        n, d = cvec.shape
+        cvec = torch.stack([cvec, cvec_shifted], dim=1).view(n * 2, d)
         
         torch.save(cvec, cvec_path)
         if verbose:
@@ -139,6 +142,7 @@ def prepare_contentvec(data_dir, model_path, num_workers, overwrite, verbose):
     train_audios = meta.get('train_audios', [])
     test_audios = meta.get('test_audios', [])
     all_audios = train_audios + test_audios
+    all_audios = tuple(filter(lambda a: a['file_name'].endswith('flac'), all_audios))
     
     if not all_audios:
         click.echo("No audio files found in meta_info.json.")
@@ -153,12 +157,20 @@ def prepare_contentvec(data_dir, model_path, num_workers, overwrite, verbose):
         verbose=verbose
     )
     
-    run_parallel(
-        all_audios,
-        process_func,
-        num_workers=num_workers,
-        desc="Extracting Content Vectors"
-    )
+    if num_workers == 0:
+        tuple(tqdm(
+            (process_func(a) for a in all_audios),
+            total=len(all_audios),
+            desc='Extracting Content Vectors',
+            unit='file',
+        ))
+    else:
+        run_parallel(
+            all_audios,
+            process_func,
+            num_workers=num_workers,
+            desc="Extracting Content Vectors"
+        )
     
     click.echo("Content vector extraction complete.")
 

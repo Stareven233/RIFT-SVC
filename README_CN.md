@@ -87,6 +87,40 @@ python scripts/prepare_data_meta.py --data-dir $DATA_DIR
 - `--only-include-speakers`：要包含在元信息中的说话者的逗号分隔列表。（默认：无）
 - `--seed`：用于可重复性的随机种子。（默认：42）
 
+！太长的音频需要先切片，不然预处理可能爆显存：
+```powershell
+$indir = '文件目录'
+$filename = '文件名'
+$duration = 180  # 3分钟
+
+# 法1
+ffmpeg -i $indir/${filename}.flac -f segment -segment_time $duration -c copy -reset_timestamps 1 -map_metadata 0 $indir/${filename}_%d.flac
+ffmpeg -i $indir/${filename}.flac -f segment -segment_time $duration -reset_timestamps 1 -c:a libmp3lame -b:a 192k -ar 44100 -ac 2 $indir/${filename}_%d.mp3
+ffmpeg -i $indir/${filename}.flac -f segment -segment_time $duration -reset_timestamps 1 -c:a pcm_s16le -ar 44100 -ac 2 $indir/${filename}_%d.wav
+# fuck flac
+ffmpeg -i "$indir/${filename}.flac" -f segment -segment_time $duration -reset_timestamps 1 -write_header 1 -c:a flac -ar 44100 -ac 2 "$indir/${filename}_%d.flac"
+Get-ChildItem "$indir\${filename}_*.flac" | ForEach-Object {
+    $tmp = "$_.tmp.flac"
+    ffmpeg -i $_ -c:a flac -compression_level 5 -y $tmp
+    if (Test-Path $tmp) {
+        Move-Item $tmp $_ -Force
+    }
+}
+
+# 法2 fuck flac
+$inputFile = Join-Path $indir "${filename}.flac"
+$ffprobe = ffprobe -v quiet -of csv=p=0 -show_entries format=duration $inputFile
+$totalDuration = [Math]::Ceiling([double]$ffprobe)
+$segmentCount = [Math]::Ceiling($totalDuration / $duration)
+for ($i = 0; $i -lt $segmentCount; $i++) {
+    $start = $i * $duration
+    $outputFile = Join-Path $indir "${filename}_$i.flac"
+    ffmpeg -y -ss $start -i $inputFile -t $duration -c:a flac -ar 44100 -ac 2 -map_metadata 0 -compression_level 5 $outputFile
+    if ($LASTEXITCODE -ne 0) {
+        break
+    }
+}
+```
 
 提取特征，运行：
 ```bash
@@ -95,7 +129,7 @@ python scripts/prepare_rms.py --data-dir $DATA_DIR --num-workers $NUM_WORKERS
 python scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers $NUM_WORKERS
 python scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers $NUM_WORKERS
 ```
-其中`$DATA_DIR`是您的数据目录路径（例如，`data/finetune`），`$NUM_WORKERS`是工作线程数。您可以根据GPU内存调整此值。
+其中`$DATA_DIR`是您的数据目录路径（例如，`data/finetune`），`$NUM_WORKERS`是工作线程数。您可以根据GPU内存调整此值。每个进程都会独自加载一份模型权重，只有一张显卡的话设0得了，否则多占显存，爆了反而会拖慢速度。
 
 
 ## 训练
