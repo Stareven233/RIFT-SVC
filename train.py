@@ -40,6 +40,7 @@ from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from torch.utils.data import DataLoader
+from lightning.pytorch import LightningModule
 
 from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
@@ -48,6 +49,9 @@ from rift_svc.lightning_module import RIFTSVCLightningModule
 from rift_svc.optim import get_optimizer
 from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, load_state_dict
 from rift_svc.utils import ckpt_step_patten
+from rift_svc.utils import safe_save_hyperparameters
+
+LightningModule.save_hyperparameters = safe_save_hyperparameters
 torch.set_float32_matmul_precision('high')
 # from omegaconf.base import ContainerMetadata
 # import typing

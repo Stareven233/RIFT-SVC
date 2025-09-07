@@ -4,6 +4,7 @@ import random
 import time
 from typing import Any
 import re
+import inspect
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,6 +13,7 @@ import torch.nn.functional as F
 from jaxtyping import Bool, Int
 from PIL import Image
 from lightning.pytorch import callbacks
+from lightning.pytorch import LightningModule
 import parselmouth as pm
 import librosa
 import pyworld as pw
@@ -380,3 +382,39 @@ def load_state_dict(model, state_dict, strict=False):
 
 
 ckpt_step_patten = re.compile(r'(?<=model-step\=)\d+')  # model-step=180000.ckpt
+
+_original_save_hp = LightningModule.save_hyperparameters
+
+
+def safe_save_hyperparameters(self, *args, **kwargs):
+    '''清理 hparams 中 可能存在的tensor
+    如果 logs 目录下不存在 hparams.yaml 则 tensorboard 会报奇怪的错误
+    '''
+
+    try:
+        if len(args) == 1 and isinstance(args[0], dict):
+            hparams = args[0]
+        else:
+            frame = inspect.currentframe().f_back
+            if frame is None:
+                return _original_save_hp(self, *args, **kwargs)
+            _, _, _, local_vars = inspect.getargvalues(frame)
+            hparams = {k: v for k, v in local_vars.items() if k != 'self'}
+
+        clean_hparams = {}
+        for k, v in hparams.items():
+            if isinstance(v, torch.Tensor):
+                # print(f"🧹 Cleaning Tensor hparam: {k} = {v.shape} {v.dtype} {list(v.shape)}")
+                if v.numel() == 1:
+                    clean_hparams[k] = v.item()
+                else:
+                    clean_hparams[k] = v.tolist()
+            elif isinstance(v, (str, int, float, bool, list, dict, type(None))):
+                clean_hparams[k] = v
+            else:
+                clean_hparams[k] = str(v)
+
+        return _original_save_hp(self, clean_hparams)
+    except Exception as e:
+        print(f"⚠️  Safe save_hyperparameters failed: {e}")
+        return _original_save_hp(self, *args, **kwargs)
