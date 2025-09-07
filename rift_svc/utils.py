@@ -11,7 +11,7 @@ import torch
 import torch.nn.functional as F
 from jaxtyping import Bool, Int
 from PIL import Image
-from pytorch_lightning import callbacks
+from lightning.pytorch import callbacks
 import parselmouth as pm
 import librosa
 import pyworld as pw
@@ -377,5 +377,6 @@ def load_state_dict(model, state_dict, strict=False):
         # Remove 'model.' prefix
         state_dict = {k.replace('model.', ''): v for k, v in state_dict.items()}
     return model.load_state_dict(state_dict, strict=strict)
+
 
 ckpt_step_patten = re.compile(r'(?<=model-step\=)\d+')  # model-step=180000.ckpt

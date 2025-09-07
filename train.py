@@ -33,21 +33,21 @@ tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
 from pathlib import Path
 import hydra
-import pytorch_lightning as pl
+from lightning import Trainer
+from lightning.pytorch import seed_everything
 import torch
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import LearningRateMonitor
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from lightning.pytorch.callbacks import LearningRateMonitor
+from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from torch.utils.data import DataLoader
 
 from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
 from rift_svc.dataset import WeightedSampler
 from rift_svc.lightning_module import RIFTSVCLightningModule
+from rift_svc.optim import get_optimizer
 from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, load_state_dict
 from rift_svc.utils import ckpt_step_patten
-from rift_svc.optim import get_optimizer
-
 torch.set_float32_matmul_precision('high')
 # from omegaconf.base import ContainerMetadata
 # import typing
@@ -57,7 +57,7 @@ torch.set_float32_matmul_precision('high')
 
 @hydra.main(version_base=None, config_path='config', config_name='noe')
 def main(cfg: DictConfig):
-    pl.seed_everything(cfg.seed)
+    seed_everything(cfg.seed)
 
     train_dataset = SVCDataset(
         **cfg.dataset,
@@ -177,7 +177,7 @@ def main(cfg: DictConfig):
     if lr_scheduler is not None:
         callbacks.append(LearningRateMonitor(logging_interval='step'))
 
-    trainer = pl.Trainer(
+    trainer = Trainer(
         max_steps=cfg.training.max_steps,
         accelerator='gpu',
         devices='auto',

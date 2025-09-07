@@ -1,14 +1,14 @@
 import gc
 import os
+from functools import partial
+import inspect
+
+import wandb
 import numpy as np
 import torch
 import torch.nn.functional as F
 import torchaudio
-import wandb
-from functools import partial
-import inspect
-
-from pytorch_lightning import LightningModule
+from lightning.pytorch import LightningModule
 
 from rift_svc.metrics import mcd, psnr, si_snr
 from rift_svc.feature_extractors import get_mel_spectrogram
@@ -261,7 +261,7 @@ class RIFTSVCLightningModule(LightningModule):
         Returns:
             bool: True if WandB logger is being used, False otherwise
         """
-        from pytorch_lightning.loggers import WandbLogger
+        from lightning.pytorch.loggers import WandbLogger
         if isinstance(self.logger, WandbLogger):
             return True
         return False
@@ -274,7 +274,7 @@ class RIFTSVCLightningModule(LightningModule):
         Returns:
             bool: True if TensorBoard logger is being used, False otherwise
         """
-        from pytorch_lightning.loggers import TensorBoardLogger
+        from lightning.pytorch.loggers import TensorBoardLogger
         if isinstance(self.logger, TensorBoardLogger):
             return True
         return False
