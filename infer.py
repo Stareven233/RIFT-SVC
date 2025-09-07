@@ -44,9 +44,11 @@ def extract_state_dict(ckpt):
         if k.startswith('model.'):
             new_k = k.replace('model.', '')
             new_state_dict[new_k] = v
-    spk2idx = ckpt['hyper_parameters']['cfg']['spk2idx']
-    model_cfg = ckpt['hyper_parameters']['cfg']['model']
-    dataset_cfg = ckpt['hyper_parameters']['cfg']['dataset']
+    cfg = ckpt['hyper_parameters']['cfg']
+    cfg = eval(cfg) if isinstance(cfg, str) else cfg
+    spk2idx = cfg['spk2idx']
+    model_cfg = cfg['model']
+    dataset_cfg = cfg['dataset']
     return new_state_dict, spk2idx, model_cfg, dataset_cfg
 
 
@@ -55,7 +57,7 @@ def load_models(model_path, device, use_fp16=True):
     click.echo("Loading models...")
     
     model_path = Path(model_path)
-    ckpt = torch.load(model_path, map_location='cpu')
+    ckpt = torch.load(model_path, map_location='cpu', weights_only=False)
     state_dict, spk2idx, dit_cfg, dataset_cfg = extract_state_dict(ckpt)
 
     transformer = DiT(num_speaker=len(spk2idx), **dit_cfg)

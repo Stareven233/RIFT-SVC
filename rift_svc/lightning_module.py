@@ -103,7 +103,6 @@ class RIFTSVCLightningModule(LightningModule):
         self.psnr = []
         self.mse = []
 
-
     def on_validation_end(self, log=True):
         if hasattr(self.optimizer, 'eval'):
             self.optimizer.train()
@@ -126,7 +125,6 @@ class RIFTSVCLightningModule(LightningModule):
             # Log metrics - compatible with both loggers
             for metric_name, metric_value in metrics.items():
                 self._log_scalar(metric_name, metric_value)
-
 
     def validation_step(self, batch, batch_idx, log=True):
         """
