@@ -371,6 +371,31 @@ class ModelCheckpoint2(callbacks.ModelCheckpoint):
         return ret
 
 
+class EnsureFinalValidationCallback(callbacks.Callback):
+    def __init__(self):
+        self.last_val_step = 0
+
+    def on_validation_end(self, trainer, pl_module):
+        # 记录每次验证发生的 global_step
+        self.last_val_step = trainer.global_step
+
+    def on_train_end(self, trainer, pl_module):
+        # 获取当前总步数 Called when the train ends
+        current_step = trainer.global_step
+        # 如果最后一次验证不是在最后一步，则手动触发一次验证
+        if self.last_val_step != current_step:
+            print(f"⚡ Final validation not at last step ({self.last_val_step} vs {current_step}). Triggering final validation...")
+            # 手动运行验证
+            trainer.validate(pl_module, verbose=False)
+            # 获取 ModelCheckpoint 实例
+            checkpoint_callbacks = [cb for cb in trainer.callbacks if isinstance(cb, callbacks.ModelCheckpoint)]
+            for cb in checkpoint_callbacks:
+                if not cb.monitor:  # 只处理有 monitor 的
+                    continue
+                # 模拟验证结束钩子，让 checkpoint 判断是否要保存
+                cb.on_validation_end(trainer, pl_module)
+
+
 # state dict helpers
 
 def load_state_dict(model, state_dict, strict=False):

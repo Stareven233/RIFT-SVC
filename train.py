@@ -47,7 +47,8 @@ from rift_svc.dataset import SVCDataset, collate_fn
 from rift_svc.dataset import WeightedSampler
 from rift_svc.lightning_module import RIFTSVCLightningModule
 from rift_svc.optim import get_optimizer
-from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, load_state_dict
+from rift_svc.utils import load_state_dict
+from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, EnsureFinalValidationCallback
 from rift_svc.utils import ckpt_step_patten
 from rift_svc.utils import safe_save_hyperparameters
 
@@ -85,7 +86,8 @@ def main(cfg: DictConfig):
 
     # Load pretrained weights if specified
     resume_ckpt = cfg.training.get('resume_from_checkpoint', None)
-    if resume_ckpt is None and cfg.training.get('pretrained_path', None) is not None:
+    pre_ckpt = cfg.training.get('pretrained_path', None)
+    if resume_ckpt is None and pre_ckpt is not None:
         state_dict = torch.load(cfg.training.pretrained_path, map_location='cpu', weights_only=False)
         # print(f'{state_dict.keys()=}')  # (['epoch', 'global_step', 'pytorch-lightning_version', 'state_dict', 'loops', 'hparams_name', 'hyper_parameters'])
         if 'state_dict' in state_dict:
@@ -106,8 +108,8 @@ def main(cfg: DictConfig):
 
     warmup_steps = int(cfg.training.max_steps * cfg.training.warmup_ratio)
     global_step = -1
-    if (ckpt := cfg.training.get('resume_from_checkpoint', None)) is not None:
-        m = ckpt_step_patten.search(ckpt)
+    if resume_ckpt or pre_ckpt:
+        m = ckpt_step_patten.search(resume_ckpt or pre_ckpt)
         assert m is not None
         global_step = int(m.group(0))
     optimizer, lr_scheduler = get_optimizer(
@@ -139,7 +141,9 @@ def main(cfg: DictConfig):
     checkpoint_callback = ModelCheckpoint2(
         dirpath=ckpt_dir,
         filename='model-{step}',
-        save_top_k=-1,
+        monitor='val/si_snr',
+        mode='max',
+        save_top_k=3,
         save_last='link',
         save_on_exception=cfg.training.get('save_on_interruption', None),
         every_n_train_steps=cfg.training.save_per_steps,
@@ -177,7 +181,7 @@ def main(cfg: DictConfig):
     else:
         raise ValueError(f"Invalid logger type: {logger_type}")
 
-    callbacks = [checkpoint_callback, CustomProgressBar()]
+    callbacks = [checkpoint_callback, CustomProgressBar(), EnsureFinalValidationCallback()]
     if lr_scheduler is not None:
         callbacks.append(LearningRateMonitor(logging_interval='step'))
 
@@ -199,7 +203,6 @@ def main(cfg: DictConfig):
 
     if hasattr(optimizer, 'train'):
         optimizer.train()
-
 
     train_sampler = WeightedSampler(train_dataset.cache['weight'], replacement=True)
     trainer.fit(
