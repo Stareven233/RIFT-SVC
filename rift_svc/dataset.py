@@ -1,15 +1,48 @@
+from pathlib import Path
 import json
-import os
 import random
-from functools import partial
-from typing import Literal
+from collections import defaultdict
+
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
+from torch.utils.data import Sampler
+from tqdm import tqdm
 
 from rift_svc.utils import linear_interpolate_tensor, nearest_interpolate_tensor
 
-pt_load = partial(torch.load, weights_only=True, map_location='cpu', mmap=True)
+
+def pt_load(path, key):
+    p = path.with_suffix(f'.{key}.pt')
+    return torch.load(p, weights_only=True, map_location='cuda', mmap=True).squeeze(0)
+
+
+class WeightedSampler(Sampler):
+    def __init__(self, weights, num_samples=None, replacement=True):
+        """
+        Args:
+            weights: 1D array-like, 每个样本的权重，weights[i] 对应 dataset[i] 的采样权重
+            num_samples: 采样总数，若为 None，则默认采样 len(weights) 个样本
+            replacement: 是否有放回采样（推荐 True，否则权重高的样本可能被采完）
+        """
+        if not isinstance(weights, torch.Tensor):
+            weights = torch.as_tensor(weights, dtype=torch.double)
+        if torch.any(weights < 0):
+            raise ValueError("Weights must be non-negative.")
+        if torch.sum(weights) == 0:
+            raise ValueError("Sum of weights must be positive.")
+
+        self.weights = weights
+        self.num_samples = num_samples if num_samples is not None else len(weights)
+        self.replacement = replacement
+
+    def __iter__(self):
+        # 使用 torch.multinomial 根据权重进行采样
+        indices = torch.multinomial(self.weights, self.num_samples, self.replacement)
+        return iter(indices.tolist())
+
+    def __len__(self):
+        return self.num_samples
 
 
 class SVCDataset(Dataset):
@@ -22,7 +55,7 @@ class SVCDataset(Dataset):
         use_cvec_downsampled: bool = False,
         cvec_downsample_rate: int = 2,
     ):
-        self.data_dir = data_dir
+        self.data_dir = Path(data_dir)
         self.max_frame_len = max_frame_len
 
         with open(meta_info_path, 'r', encoding='utf-8') as f:
@@ -35,24 +68,39 @@ class SVCDataset(Dataset):
         self.samples = meta[f"{split}_audios"]
         self.use_cvec_downsampled = use_cvec_downsampled
         self.cvec_downsample_rate = cvec_downsample_rate
+        self.cache = self._load_cache()
+
+    def _load_cache(self):
+        cache = defaultdict(list)
+        for s in tqdm(self.samples, desc='loading preprocessed cache'):
+            spk = s['speaker']
+            path = self.data_dir / spk / s['file_name']
+            mel = pt_load(path, 'mel').T
+            cache['spk_id'].append(torch.LongTensor([self.spk2idx[spk]]))
+            cache['f0'].append(pt_load(path, 'f0'))
+            cache['rms'].append(pt_load(path, 'rms'))
+            cache['mel'].append(mel)
+            # 采样权重，长度小于 max_frame_len 的均是同等的一次采样
+            cache['weight'].append(max(self.max_frame_len, mel.shape[0]))
+        return cache
 
     def get_frame_len(self, index):
-        return self.samples[index]['frame_len']
+        return self.cache['mel'][index].shape[0]
     
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, index):
-
+        load = lambda key, func: self.cache[key][index] if key in self.cache else func()
         sample = self.samples[index]
         spk = sample['speaker']
-        path = os.path.join(self.data_dir, spk, sample['file_name'])
-        spk_id = torch.LongTensor([self.spk2idx[spk]]) # [1]
+        path = self.data_dir / spk / sample['file_name']
+        spk_id = load('spk_id', lambda: torch.LongTensor([self.spk2idx[spk]]))  # [1]
 
-        mel = pt_load(path + ".mel.pt").squeeze(0).T
-        rms = pt_load(path + ".rms.pt").squeeze(0)
-        f0 = pt_load(path + ".f0.pt").squeeze(0)
-        cvec = pt_load(path + ".cvec.pt").squeeze(0)
+        mel = load('mel', lambda: pt_load(path, 'mel').T)
+        rms = load('rms', lambda: pt_load(path, 'rms'))
+        f0 = load('f0', lambda: pt_load(path, 'f0'))
+        cvec = pt_load(path, 'cvec')
 
         cvec = linear_interpolate_tensor(cvec, mel.shape[0])
         if self.use_cvec_downsampled:

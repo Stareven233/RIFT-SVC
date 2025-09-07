@@ -42,6 +42,7 @@ from torch.utils.data import DataLoader
 
 from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
+from rift_svc.dataset import WeightedSampler
 from rift_svc.lightning_module import RIFTSVCLightningModule
 from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, load_state_dict
 from rift_svc.utils import ckpt_step_patten
@@ -54,7 +55,7 @@ torch.set_float32_matmul_precision('high')
 # torch.serialization.add_safe_globals([DictConfig, ContainerMetadata, typing.Any, dict, defaultdict])
 
 
-@hydra.main(version_base=None, config_path='config', config_name='noe-512')
+@hydra.main(version_base=None, config_path='config', config_name='noe')
 def main(cfg: DictConfig):
     pl.seed_everything(cfg.seed)
 
@@ -195,15 +196,17 @@ def main(cfg: DictConfig):
     if hasattr(optimizer, 'train'):
         optimizer.train()
 
+
+    train_sampler = WeightedSampler(train_dataset.cache['weight'], replacement=True)
     trainer.fit(
         model,
         train_dataloaders=DataLoader(
             train_dataset,
             batch_size=cfg.training.batch_size_per_gpu,
             num_workers=cfg.training.num_workers,
-            persistent_workers=True,
-            shuffle=True,
+            sampler=train_sampler,
             drop_last=True,
+            persistent_workers=True,
             collate_fn=collate_fn,
         ),
         val_dataloaders=DataLoader(
