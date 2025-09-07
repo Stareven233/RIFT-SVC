@@ -20,6 +20,7 @@ def pt_load(path, key, loc='cuda'):
 class WeightedSampler(Sampler):
     def __init__(self, weights, num_samples=None, replacement=True):
         """
+        torch.utils.data.WeightedRandomSampler
         Args:
             weights: 1D array-like, 每个样本的权重，weights[i] 对应 dataset[i] 的采样权重
             num_samples: 采样总数，若为 None，则默认采样 len(weights) 个样本
@@ -68,18 +69,18 @@ class SVCDataset(Dataset):
         self.samples = meta[f"{split}_audios"]
         self.use_cvec_downsampled = use_cvec_downsampled
         self.cvec_downsample_rate = cvec_downsample_rate
-        self.cache = self._load_cache()
+        self.cache = self._load_cache_lazy()
 
-    def _load_cache(self):
+    def _load_cache_lazy(self, lazy=True):
         cache = defaultdict(list)
         for s in tqdm(self.samples, desc='loading preprocessed cache'):
             spk = s['speaker']
             path = self.data_dir / spk / s['file_name']
             mel = pt_load(path, 'mel').T
-            cache['spk_id'].append(torch.LongTensor([self.spk2idx[spk]]))
-            cache['f0'].append(pt_load(path, 'f0'))
-            cache['rms'].append(pt_load(path, 'rms'))
-            # cache['cvec'].append(pt_load(path, 'cvec', 'cpu'))
+            cache['spk_id'].append(None if lazy else torch.LongTensor([self.spk2idx[spk]]))
+            cache['f0'].append(None if lazy else pt_load(path, 'f0'))
+            cache['rms'].append(None if lazy else pt_load(path, 'rms'))
+            cache['cvec'].append(None if lazy else pt_load(path, 'cvec', 'cpu'))
             cache['mel'].append(mel)
             # 采样权重，长度小于 max_frame_len 的均是同等的一次采样
             cache['weight'].append(max(self.max_frame_len, mel.shape[0]))
@@ -92,7 +93,13 @@ class SVCDataset(Dataset):
         return len(self.samples)
     
     def __getitem__(self, index):
-        load = lambda key, func: self.cache[key][index] if key in self.cache else func()
+        def load(key, func):
+            if (data := self.cache[key][index]) is not None:
+                return data
+            data = func()
+            self.cache[key][index] = data
+            return data
+
         sample = self.samples[index]
         spk = sample['speaker']
         path = self.data_dir / spk / sample['file_name']
