@@ -12,9 +12,9 @@ from tqdm import tqdm
 from rift_svc.utils import linear_interpolate_tensor, nearest_interpolate_tensor
 
 
-def pt_load(path, key):
+def pt_load(path, key, loc='cuda'):
     p = path.with_suffix(f'.{key}.pt')
-    return torch.load(p, weights_only=True, map_location='cuda', mmap=True).squeeze(0)
+    return torch.load(p, weights_only=True, map_location=loc, mmap=True).squeeze(0)
 
 
 class WeightedSampler(Sampler):
@@ -79,6 +79,7 @@ class SVCDataset(Dataset):
             cache['spk_id'].append(torch.LongTensor([self.spk2idx[spk]]))
             cache['f0'].append(pt_load(path, 'f0'))
             cache['rms'].append(pt_load(path, 'rms'))
+            # cache['cvec'].append(pt_load(path, 'cvec', 'cpu'))
             cache['mel'].append(mel)
             # 采样权重，长度小于 max_frame_len 的均是同等的一次采样
             cache['weight'].append(max(self.max_frame_len, mel.shape[0]))
@@ -100,7 +101,7 @@ class SVCDataset(Dataset):
         mel = load('mel', lambda: pt_load(path, 'mel').T)
         rms = load('rms', lambda: pt_load(path, 'rms'))
         f0 = load('f0', lambda: pt_load(path, 'f0'))
-        cvec = pt_load(path, 'cvec')
+        cvec = load('cvec', lambda: pt_load(path, 'cvec', 'cpu'))
 
         cvec = linear_interpolate_tensor(cvec, mel.shape[0])
         if self.use_cvec_downsampled:
