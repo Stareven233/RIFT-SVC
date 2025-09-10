@@ -93,12 +93,15 @@ $indir = '文件目录'
 $filename = '文件名'
 $duration = 180  # 3分钟
 
-# 法1
 ffmpeg -i $indir/${filename}.flac -f segment -segment_time $duration -c copy -reset_timestamps 1 -map_metadata 0 $indir/${filename}_%d.flac
 ffmpeg -i $indir/${filename}.flac -f segment -segment_time $duration -reset_timestamps 1 -c:a libmp3lame -b:a 192k -ar 44100 -ac 2 $indir/${filename}_%d.mp3
 ffmpeg -i $indir/${filename}.flac -f segment -segment_time $duration -reset_timestamps 1 -c:a pcm_s16le -ar 44100 -ac 2 $indir/${filename}_%d.wav
 # fuck flac
+ffmpeg -i "$indir/${filename}.m4a" "$indir/${filename}.flac"
 ffmpeg -i "$indir/${filename}.flac" -f segment -segment_time $duration -reset_timestamps 1 -write_header 1 -c:a flac -ar 44100 -ac 2 "$indir/${filename}_%d.flac"
+
+# 修复flac分段长度
+# 法1
 Get-ChildItem "$indir\${filename}_*.flac" | ForEach-Object {
     $tmp = "$_.tmp.flac"
     ffmpeg -i $_ -c:a flac -compression_level 5 -y $tmp
@@ -106,7 +109,6 @@ Get-ChildItem "$indir\${filename}_*.flac" | ForEach-Object {
         Move-Item $tmp $_ -Force
     }
 }
-
 # 法2 fuck flac
 $inputFile = Join-Path $indir "${filename}.flac"
 $ffprobe = ffprobe -v quiet -of csv=p=0 -show_entries format=duration $inputFile

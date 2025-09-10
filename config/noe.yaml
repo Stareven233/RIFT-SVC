@@ -1,12 +1,14 @@
 seed: 233
+name: fritia
+# name: megumin
 
 defaults:
   - _self_
   - model: dit-512-8
 
 dataset:
-  data_dir: data/megumin
-  meta_info_path: data/megumin/meta_info.json
+  data_dir: data/${name}
+  meta_info_path: data/${name}/meta_info.json
   max_frame_len: 256
 
 vocoder:
@@ -16,14 +18,15 @@ vocoder:
 training:
   run_name: test
   learning_rate: 6.0e-5
-  batch_size_per_gpu: 80
-  max_steps: 7000
+  batch_size_per_gpu: 64
+  # max_steps: 7520
+  max_steps: 5020
   warmup_ratio: 0.05
   gamma: 0.9
-  decay_step: 1500
+  decay_step: 1000
   test_per_steps: 1000
-  save_per_steps: 1500
-  log_media_per_steps: 1500
+  save_per_steps: 1000
+  log_media_per_steps: 1000
   weight_decay: 0.01
   num_workers: 4
   optimizer_type: moun
@@ -35,7 +38,8 @@ training:
   pretrained_path: pretrained/pretrain-v3_dit-512-8.ckpt
   # save_weights_only: false
   save_weights_only: true
-  save_on_interruption: true
+  save_on_interruption: false
+  freeze_adaln_and_tembed: false
   eval_sample_steps: 32
   drop_spk_prob: 0.0
   time_schedule: lognorm

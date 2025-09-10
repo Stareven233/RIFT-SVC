@@ -9,20 +9,23 @@ New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\voco
 
 !这个项目不需要提前切片，会在训练时随机借助python序列的slice功能切
 
-$DATA_DIR="data"
-& uv run scripts/resample_normalize_audios.py --src $DATA_DIR
-& uv run scripts/prepare_data_meta.py --data-dir $DATA_DIR
-& uv run scripts/prepare_mel.py --data-dir $DATA_DIR --num-workers 2
-& uv run scripts/prepare_rms.py --data-dir $DATA_DIR --num-workers 2
-& uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 2
-& uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 2
+cd D:\Code\projects\RIFT-SVC
+$DATA_DIR="data/megumin"
+$DATA_DIR="data/fritia"
+$DATA_DIR="D:\Code\projects\RIFT-SVC\data\fritia\t"
+uv run scripts/resample_normalize_audios.py --src $DATA_DIR
+uv run scripts/prepare_data_meta.py --data-dir $DATA_DIR --num-test 20
+uv run scripts/prepare_mel.py --data-dir $DATA_DIR --num-workers 0
+uv run scripts/prepare_rms.py --data-dir $DATA_DIR --num-workers 0
+uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
+uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$name="fritia-512"
+$name="megumin-r2"
+$name="fritia-test"
 uv run train.py training.run_name=$name
-uv run train.py training.run_name=$name training.pretrained_path=ckpts/$name/model-step\=213.ckpt
-uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/model-step\=213.ckpt
-uv run train.py --config-name=noe-512 training.run_name=$name
+uv run train.py training.run_name=$name training.pretrained_path=ckpts/megumin/model-step\=6000.ckpt
+uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/model-step\=6000.ckpt
 uv run train.py training.run_name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
@@ -40,7 +43,9 @@ from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from torch.utils.data import DataLoader
+from torch.utils.data import WeightedRandomSampler
 from lightning.pytorch import LightningModule
+from lightning.pytorch.profilers import SimpleProfiler
 
 from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
@@ -110,8 +115,7 @@ def main(cfg: DictConfig):
     global_step = -1
     if resume_ckpt or pre_ckpt:
         m = ckpt_step_patten.search(resume_ckpt or pre_ckpt)
-        assert m is not None
-        global_step = int(m.group(0))
+        global_step = (m and int(m.group(0))) or -1
     optimizer, lr_scheduler = get_optimizer(
         cfg.training.optimizer_type,
         rf, 
@@ -143,7 +147,7 @@ def main(cfg: DictConfig):
         filename='model-{step}',
         monitor='val/si_snr',
         mode='max',
-        save_top_k=3,
+        save_top_k=2,
         save_last='link',
         save_on_exception=cfg.training.get('save_on_interruption', None),
         every_n_train_steps=cfg.training.save_per_steps,
@@ -199,18 +203,21 @@ def main(cfg: DictConfig):
         gradient_clip_val=cfg.training.max_grad_norm,
         gradient_clip_algorithm='norm',
         log_every_n_steps=cfg.training.log_every_n_steps,
+        # profiler=SimpleProfiler(dirpath='logs', filename='simple_profile'),
     )
 
     if hasattr(optimizer, 'train'):
         optimizer.train()
 
-    train_sampler = WeightedSampler(train_dataset.cache['weight'], replacement=True)
+    # train_sampler = WeightedSampler(train_dataset.cache['weight'], replacement=True)
+    train_sampler = WeightedRandomSampler(train_dataset.cache['weight'], len(train_dataset), replacement=True)
     trainer.fit(
         model,
         train_dataloaders=DataLoader(
             train_dataset,
             batch_size=cfg.training.batch_size_per_gpu,
             num_workers=cfg.training.num_workers,
+            # shuffle=True,
             sampler=train_sampler,
             drop_last=True,
             persistent_workers=True,

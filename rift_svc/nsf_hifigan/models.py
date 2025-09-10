@@ -298,6 +298,7 @@ class Generator(nn.Module):
             l.remove_weight_norm()
         remove_weight_norm(self.conv_pre)
         remove_weight_norm(self.conv_post)
+        print('After Removing weight norm...')
 
 
 class DiscriminatorP(torch.nn.Module):

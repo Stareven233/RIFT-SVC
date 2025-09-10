@@ -1,17 +1,23 @@
 r'''
-当前感觉跟ddsp差不太多，训练慢一些，都有音色泄露
-
-
+跟ddsp差不多，更贴近参考的内容（唱法）及响度，训练慢一些，都有音色泄露
+二者都利用cvec抽取语义信息作为条件，reflow从噪声开始预测mel频谱(只是里面的预测模型用的不一样)，再由vocoder合成为audio，音色泄露或许是reflow的通病？
+rift更不受输入唱法影响？更擅长频谱图重建？推理快
 
 cd D:\Code\projects\RIFT-SVC
 nvidia-smi
 
-$model = "ckpts/fritia/model-step=10000.ckpt"
+$model = "ckpts/fritia/model-step=6000.ckpt"
+$model = "ckpts/megumin/model-step=6000.ckpt"
+$indir = "D:\Document\ai-sings\銀の龍の背に乗って"
+$filename = "日本的国宝中岛美雪-骑在银龙的背上_vocals_noreverb_Vocals.flac"
 $indir = "D:\Document\ai-sings\LETTER"
 $filename = "咪咕音乐-6005970A0NP_Vocals_vocals_noreverb.flac"
+$indir = "D:\Document\ai-sings\God Knows"
+$filename = "4K高清修复音源升级God Knows_Vocals_vocals_noreverb.flac"
 $key=0
 
-& uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 6 -k $key
+& uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key
+& uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 8 -k $key
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.1 --spk-cfg-strength 0.2 --skip-cfg-strength 0.1 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 '''
 

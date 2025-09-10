@@ -142,7 +142,6 @@ def prepare_contentvec(data_dir, model_path, num_workers, overwrite, verbose):
     train_audios = meta.get('train_audios', [])
     test_audios = meta.get('test_audios', [])
     all_audios = train_audios + test_audios
-    all_audios = tuple(filter(lambda a: a['file_name'].endswith('flac'), all_audios))
     
     if not all_audios:
         click.echo("No audio files found in meta_info.json.")

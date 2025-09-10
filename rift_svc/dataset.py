@@ -55,6 +55,7 @@ class SVCDataset(Dataset):
         split = "train",
         use_cvec_downsampled: bool = False,
         cvec_downsample_rate: int = 2,
+        lazy=False,
     ):
         self.data_dir = Path(data_dir)
         self.max_frame_len = max_frame_len
@@ -66,10 +67,13 @@ class SVCDataset(Dataset):
         self.num_speakers = len(speakers)
         self.spk2idx = {spk: idx for idx, spk in enumerate(speakers)}
         self.split = split
-        self.samples = meta[f"{split}_audios"]
+        s = meta[f"{split}_audios"]
+        self.samples = s[:]
+        print(tuple(s['file_name'] for s in self.samples), len(self.samples))
+        # exit()
         self.use_cvec_downsampled = use_cvec_downsampled
         self.cvec_downsample_rate = cvec_downsample_rate
-        self.cache = self._load_cache_lazy()
+        self.cache = self._load_cache_lazy(lazy)
 
     def _load_cache_lazy(self, lazy=True):
         cache = defaultdict(list)
@@ -83,7 +87,7 @@ class SVCDataset(Dataset):
             cache['cvec'].append(None if lazy else pt_load(path, 'cvec', 'cpu'))
             cache['mel'].append(mel)
             # 采样权重，长度小于 max_frame_len 的均是同等的一次采样
-            cache['weight'].append(max(self.max_frame_len, mel.shape[0]))
+            cache['weight'].append(max(self.max_frame_len, mel.shape[0]) ** 0.6)
         return cache
 
     def get_frame_len(self, index):
@@ -159,22 +163,23 @@ class SVCDataset(Dataset):
 
 
 def collate_fn(batch):
-    spk_ids = [item['spk_id'] for item in batch]
-    mels = [item['mel'] for item in batch]
-    rmss = [item['rms'] for item in batch]
-    f0s = [item['f0'] for item in batch]
-    cvecs = [item['cvec'] for item in batch]
-    if 'cvec_ds' in batch[0]:
-        cvecs_ds = [item['cvec_ds'] for item in batch]
-
-    frame_lens = [item['frame_len'] for item in batch]
+    spk_ids, mels, rmss, f0s, cvecs, frame_lens = [], [], [], [], [], []
+    for item in batch:
+        spk_ids.append(item['spk_id'])
+        mels.append(item['mel'])
+        rmss.append(item['rms'])
+        f0s.append(item['f0'])
+        cvecs.append(item['cvec'])
+        frame_lens.append(item['frame_len'])
 
     # Pad sequences to max length
     mels_padded = pad_sequence(mels, batch_first=True)
     rmss_padded = pad_sequence(rmss, batch_first=True)
     f0s_padded = pad_sequence(f0s, batch_first=True)
     cvecs_padded = pad_sequence(cvecs, batch_first=True)
+
     if 'cvec_ds' in batch[0]:
+        cvecs_ds = [item['cvec_ds'] for item in batch]
         cvecs_ds_padded = pad_sequence(cvecs_ds, batch_first=True)
 
     spk_ids = torch.cat(spk_ids)

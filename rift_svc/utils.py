@@ -386,7 +386,7 @@ class EnsureFinalValidationCallback(callbacks.Callback):
         if self.last_val_step != current_step:
             print(f"⚡ Final validation not at last step ({self.last_val_step} vs {current_step}). Triggering final validation...")
             # 手动运行验证
-            trainer.validate(pl_module, verbose=False)
+            trainer.validate(pl_module, trainer.val_dataloaders, verbose=False)
             # 获取 ModelCheckpoint 实例
             checkpoint_callbacks = [cb for cb in trainer.callbacks if isinstance(cb, callbacks.ModelCheckpoint)]
             for cb in checkpoint_callbacks:
