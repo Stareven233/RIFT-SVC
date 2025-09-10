@@ -21,10 +21,10 @@ uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
 uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$name="megumin-r2"
 $name="fritia-test"
+$name="megumin-r2"
+uv run train.py training.run_name=$name training.pretrained_path=ckpts/megumin-r2/model-step\=62.ckpt
 uv run train.py training.run_name=$name
-uv run train.py training.run_name=$name training.pretrained_path=ckpts/megumin/model-step\=6000.ckpt
 uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/model-step\=6000.ckpt
 uv run train.py training.run_name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
@@ -32,6 +32,8 @@ tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
 #todo
 音区偏移
+直接将模型权重加载到 GPU，避免 CPU 内存爆炸
+checkpoint = torch.load('last.ckpt', map_location=device, weights_only=True)
 '''
 
 from pathlib import Path
@@ -45,11 +47,9 @@ from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from torch.utils.data import DataLoader
 from torch.utils.data import WeightedRandomSampler
 from lightning.pytorch import LightningModule
-from lightning.pytorch.profilers import SimpleProfiler
 
 from rift_svc import DiT, RF
 from rift_svc.dataset import SVCDataset, collate_fn
-from rift_svc.dataset import WeightedSampler
 from rift_svc.lightning_module import RIFTSVCLightningModule
 from rift_svc.optim import get_optimizer
 from rift_svc.utils import load_state_dict
@@ -69,21 +69,12 @@ torch.set_float32_matmul_precision('high')
 def main(cfg: DictConfig):
     seed_everything(cfg.seed)
 
-    train_dataset = SVCDataset(
-        **cfg.dataset,
-        split="train"
-    )
-    
-    val_dataset = SVCDataset(
-        **cfg.dataset,
-        split="test"
-    )
-
+    train_dataset = SVCDataset(**cfg.dataset, split='train')
+    val_dataset = SVCDataset(**cfg.dataset, split='test')
     transformer = DiT(
         **cfg.model,
         num_speaker=train_dataset.num_speakers,
     )
-
     rf = RF(
         transformer=transformer,
         time_schedule=cfg.training.time_schedule,

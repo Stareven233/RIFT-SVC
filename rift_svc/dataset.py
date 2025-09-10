@@ -1,49 +1,21 @@
+import json
 from pathlib import Path
 import json
 import random
+from functools import partial
 from collections import defaultdict
-
 import torch
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from torch.utils.data import Sampler
 from tqdm import tqdm
 
 from rift_svc.utils import linear_interpolate_tensor, nearest_interpolate_tensor
 
 
-def pt_load(path, key, loc='cuda'):
+# pt_load = partial(torch.load, weights_only=True, map_location='cpu', mmap=True)
+def pt_load(path, key, loc='cpu'):
     p = path.with_suffix(f'.{key}.pt')
     return torch.load(p, weights_only=True, map_location=loc, mmap=True).squeeze(0)
-
-
-class WeightedSampler(Sampler):
-    def __init__(self, weights, num_samples=None, replacement=True):
-        """
-        torch.utils.data.WeightedRandomSampler
-        Args:
-            weights: 1D array-like, 每个样本的权重，weights[i] 对应 dataset[i] 的采样权重
-            num_samples: 采样总数，若为 None，则默认采样 len(weights) 个样本
-            replacement: 是否有放回采样（推荐 True，否则权重高的样本可能被采完）
-        """
-        if not isinstance(weights, torch.Tensor):
-            weights = torch.as_tensor(weights, dtype=torch.double)
-        if torch.any(weights < 0):
-            raise ValueError("Weights must be non-negative.")
-        if torch.sum(weights) == 0:
-            raise ValueError("Sum of weights must be positive.")
-
-        self.weights = weights
-        self.num_samples = num_samples if num_samples is not None else len(weights)
-        self.replacement = replacement
-
-    def __iter__(self):
-        # 使用 torch.multinomial 根据权重进行采样
-        indices = torch.multinomial(self.weights, self.num_samples, self.replacement)
-        return iter(indices.tolist())
-
-    def __len__(self):
-        return self.num_samples
 
 
 class SVCDataset(Dataset):
@@ -67,10 +39,7 @@ class SVCDataset(Dataset):
         self.num_speakers = len(speakers)
         self.spk2idx = {spk: idx for idx, spk in enumerate(speakers)}
         self.split = split
-        s = meta[f"{split}_audios"]
-        self.samples = s[:]
-        print(tuple(s['file_name'] for s in self.samples), len(self.samples))
-        # exit()
+        self.samples = meta[f"{split}_audios"]
         self.use_cvec_downsampled = use_cvec_downsampled
         self.cvec_downsample_rate = cvec_downsample_rate
         self.cache = self._load_cache_lazy(lazy)
@@ -107,20 +76,29 @@ class SVCDataset(Dataset):
         sample = self.samples[index]
         spk = sample['speaker']
         path = self.data_dir / spk / sample['file_name']
-        spk_id = load('spk_id', lambda: torch.LongTensor([self.spk2idx[spk]]))  # [1]
 
+        # ----cached
+        spk_id = load('spk_id', lambda: torch.LongTensor([self.spk2idx[spk]]))  # [1]
         mel = load('mel', lambda: pt_load(path, 'mel').T)
         rms = load('rms', lambda: pt_load(path, 'rms'))
         f0 = load('f0', lambda: pt_load(path, 'f0'))
         cvec = load('cvec', lambda: pt_load(path, 'cvec', 'cpu'))
+        # ----cached
 
-        cvec = linear_interpolate_tensor(cvec, mel.shape[0])
+        # ----origin
+        # spk_id = torch.LongTensor([self.spk2idx[spk]]) # [1]
+        # mel = pt_load(path.with_suffix(".mel.pt")).squeeze(0).T
+        # rms = pt_load(path.with_suffix(".rms.pt")).squeeze(0)
+        # f0 = pt_load(path.with_suffix(".f0.pt")).squeeze(0)
+        # cvec = pt_load(path.with_suffix(".cvec.pt")).squeeze(0)
+        # ----origin
+
+        frame_len = mel.shape[0]
+        cvec = linear_interpolate_tensor(cvec, frame_len)
         if self.use_cvec_downsampled:
             cvec_ds = cvec[::2, :]
             cvec_ds = linear_interpolate_tensor(cvec_ds, cvec_ds.shape[0]//self.cvec_downsample_rate)
-            cvec_ds = linear_interpolate_tensor(cvec_ds, mel.shape[0])
-
-        frame_len = mel.shape[0]
+            cvec_ds = linear_interpolate_tensor(cvec_ds, frame_len)
 
         if frame_len > self.max_frame_len:
             if self.split == "train": 

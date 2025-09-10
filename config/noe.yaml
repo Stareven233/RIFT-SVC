@@ -1,6 +1,6 @@
 seed: 233
-name: fritia
-# name: megumin
+# name: fritia
+name: megumin
 
 defaults:
   - _self_
@@ -18,15 +18,20 @@ vocoder:
 training:
   run_name: test
   learning_rate: 6.0e-5
-  batch_size_per_gpu: 64
-  # max_steps: 7520
-  max_steps: 5020
-  warmup_ratio: 0.05
+  batch_size_per_gpu: 80
+  # -----fritia------
+  # max_steps: 5020
+  # decay_step: 1000
+  # test_per_steps: 1000
+  # save_per_steps: 1000
+  # -----megumin------
+  max_steps: 6520
+  decay_step: 1500
+  test_per_steps: 1500
+  save_per_steps: 1500
+  # -----megumin------
   gamma: 0.9
-  decay_step: 1000
-  test_per_steps: 1000
-  save_per_steps: 1000
-  log_media_per_steps: 1000
+  warmup_ratio: 0.05
   weight_decay: 0.01
   num_workers: 4
   optimizer_type: moun
@@ -34,11 +39,12 @@ training:
   grad_accumulation_steps: 1
   max_grad_norm: 0
   log_every_n_steps: 10
+  log_media_per_steps: 1000
   resume_from_checkpoint: ~
   pretrained_path: pretrained/pretrain-v3_dit-512-8.ckpt
   # save_weights_only: false
   save_weights_only: true
-  save_on_interruption: false
+  save_on_interruption: true
   freeze_adaln_and_tembed: false
   eval_sample_steps: 32
   drop_spk_prob: 0.0
