@@ -352,8 +352,8 @@ class CustomProgressBar(callbacks.TQDMProgressBar):
         # Update the progress bar with loss, elapsed time, remaining time, and remaining steps
         self.train_progress_bar.set_postfix({
             "loss": f"{outputs['loss'].item():.4f}",
-            "elapsed_time": elapsed_time_str + "/" + remaining_time_str,
-            "remaining_steps": str(remaining_steps) + "/" + str(total_steps)
+            "time": elapsed_time_str + "/" + remaining_time_str,
+            "steps": str(remaining_steps) + "/" + str(total_steps)
         })
 
 
@@ -390,8 +390,6 @@ class EnsureFinalValidationCallback(callbacks.Callback):
             # 获取 ModelCheckpoint 实例
             checkpoint_callbacks = [cb for cb in trainer.callbacks if isinstance(cb, callbacks.ModelCheckpoint)]
             for cb in checkpoint_callbacks:
-                if not cb.monitor:  # 只处理有 monitor 的
-                    continue
                 # 模拟验证结束钩子，让 checkpoint 判断是否要保存
                 cb.on_validation_end(trainer, pl_module)
 

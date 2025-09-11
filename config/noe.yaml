@@ -1,5 +1,4 @@
 seed: 233
-# name: fritia
 name: megumin
 
 defaults:
@@ -17,20 +16,13 @@ vocoder:
 
 training:
   run_name: test
-  learning_rate: 6.0e-5
+  learning_rate: 8.0e-5
   batch_size_per_gpu: 80
-  # -----fritia------
-  # max_steps: 5020
-  # decay_step: 1000
-  # test_per_steps: 1000
-  # save_per_steps: 1000
-  # -----megumin------
-  max_steps: 6520
+  max_steps: 5200
   decay_step: 1500
-  test_per_steps: 1500
-  save_per_steps: 1500
-  # -----megumin------
-  gamma: 0.9
+  test_per_steps: 1000
+  save_per_steps: ${training.test_per_steps}
+  gamma: 0.6
   warmup_ratio: 0.05
   weight_decay: 0.01
   num_workers: 4

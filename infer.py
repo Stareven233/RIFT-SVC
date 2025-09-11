@@ -7,7 +7,7 @@ cd D:\Code\projects\RIFT-SVC
 nvidia-smi
 
 $model = "ckpts/fritia/model-step=6000.ckpt"
-$model = "ckpts/megumin/model-step=6000.ckpt"
+$model = "ckpts/megumin/model-step=4000.ckpt"
 $indir = "D:\Document\ai-sings\銀の龍の背に乗って"
 $filename = "日本的国宝中岛美雪-骑在银龙的背上_vocals_noreverb_Vocals.flac"
 $indir = "D:\Document\ai-sings\LETTER"

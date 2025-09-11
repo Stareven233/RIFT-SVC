@@ -21,19 +21,21 @@ uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
 uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$name="fritia-test"
-$name="megumin-r2"
-uv run train.py training.run_name=$name training.pretrained_path=ckpts/megumin-r2/model-step\=62.ckpt
-uv run train.py training.run_name=$name
-uv run train.py training.run_name=$name training.resume_from_checkpoint=ckpts/$name/model-step\=6000.ckpt
-uv run train.py training.run_name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
+$name = "fritia"
+$override = @("training.run_name=${name}-r3", "training.max_steps=3520","training.decay_step=800","training.test_per_steps=800")
+$name = "megumin"
+$override = @("training.run_name=${name}-r2", "training.max_steps=5200","training.decay_step=1500","training.test_per_steps=1000")
+
+uv run train.py name=$name @override training.resume_from_checkpoint=ckpts/megumin-r2/model-step\=2999.ckpt
+uv run train.py name=$name $override
+uv run train.py name=$name @override training.pretrained_path=ckpts/megumin-r2/model-step\=1059.ckpt
+uv run train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
 
 #todo
+dataset转为iter类型，或者多倍，减少epoch交替时速度降低
 音区偏移
-直接将模型权重加载到 GPU，避免 CPU 内存爆炸
-checkpoint = torch.load('last.ckpt', map_location=device, weights_only=True)
 '''
 
 from pathlib import Path
@@ -84,7 +86,7 @@ def main(cfg: DictConfig):
     resume_ckpt = cfg.training.get('resume_from_checkpoint', None)
     pre_ckpt = cfg.training.get('pretrained_path', None)
     if resume_ckpt is None and pre_ckpt is not None:
-        state_dict = torch.load(cfg.training.pretrained_path, map_location='cpu', weights_only=False)
+        state_dict = torch.load(cfg.training.pretrained_path, map_location='cuda', weights_only=False)
         # print(f'{state_dict.keys()=}')  # (['epoch', 'global_step', 'pytorch-lightning_version', 'state_dict', 'loops', 'hparams_name', 'hyper_parameters'])
         if 'state_dict' in state_dict:
             state_dict = state_dict['state_dict']
@@ -136,9 +138,9 @@ def main(cfg: DictConfig):
     checkpoint_callback = ModelCheckpoint2(
         dirpath=ckpt_dir,
         filename='model-{step}',
-        monitor='val/si_snr',
-        mode='max',
-        save_top_k=2,
+        # monitor='val/si_snr',
+        # mode='max',
+        save_top_k=-1,
         save_last='link',
         save_on_exception=cfg.training.get('save_on_interruption', None),
         every_n_train_steps=cfg.training.save_per_steps,

@@ -53,10 +53,10 @@ class SVCDataset(Dataset):
             cache['spk_id'].append(None if lazy else torch.LongTensor([self.spk2idx[spk]]))
             cache['f0'].append(None if lazy else pt_load(path, 'f0'))
             cache['rms'].append(None if lazy else pt_load(path, 'rms'))
-            cache['cvec'].append(None if lazy else pt_load(path, 'cvec', 'cpu'))
+            cache['cvec'].append(None if lazy else pt_load(path, 'cvec'))
             cache['mel'].append(mel)
             # 采样权重，长度小于 max_frame_len 的均是同等的一次采样
-            cache['weight'].append(max(self.max_frame_len, mel.shape[0]) ** 0.6)
+            cache['weight'].append(max(self.max_frame_len, mel.shape[0]) ** 0.7)
         return cache
 
     def get_frame_len(self, index):
