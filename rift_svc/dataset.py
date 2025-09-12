@@ -9,13 +9,25 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from rift_svc.utils import linear_interpolate_tensor, nearest_interpolate_tensor
+from rift_svc.utils import linear_interpolate_tensor
+
+
+class LazyTensorLoader:
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self._tensor = None
+
+    @property
+    def tensor(self):
+        if self._tensor is None:
+            self._tensor = torch.load(self.file_path, mmap=False)
+        return self._tensor
 
 
 # pt_load = partial(torch.load, weights_only=True, map_location='cpu', mmap=True)
-def pt_load(path, key, loc='cpu'):
+def pt_load(path, key, loc='cpu', mmap=False):
     p = path.with_suffix(f'.{key}.pt')
-    return torch.load(p, weights_only=True, map_location=loc, mmap=True).squeeze(0)
+    return torch.load(p, weights_only=True, map_location=loc, mmap=mmap).squeeze(0)
 
 
 class SVCDataset(Dataset):
@@ -56,7 +68,7 @@ class SVCDataset(Dataset):
             cache['cvec'].append(None if lazy else pt_load(path, 'cvec'))
             cache['mel'].append(mel)
             # 采样权重，长度小于 max_frame_len 的均是同等的一次采样
-            cache['weight'].append(max(self.max_frame_len, mel.shape[0]) ** 0.7)
+            cache['weight'].append(max(self.max_frame_len, mel.shape[0]) ** 0.6)
         return cache
 
     def get_frame_len(self, index):
@@ -77,21 +89,11 @@ class SVCDataset(Dataset):
         spk = sample['speaker']
         path = self.data_dir / spk / sample['file_name']
 
-        # ----cached
         spk_id = load('spk_id', lambda: torch.LongTensor([self.spk2idx[spk]]))  # [1]
-        mel = load('mel', lambda: pt_load(path, 'mel').T)
-        rms = load('rms', lambda: pt_load(path, 'rms'))
-        f0 = load('f0', lambda: pt_load(path, 'f0'))
-        cvec = load('cvec', lambda: pt_load(path, 'cvec', 'cpu'))
-        # ----cached
-
-        # ----origin
-        # spk_id = torch.LongTensor([self.spk2idx[spk]]) # [1]
-        # mel = pt_load(path.with_suffix(".mel.pt")).squeeze(0).T
-        # rms = pt_load(path.with_suffix(".rms.pt")).squeeze(0)
-        # f0 = pt_load(path.with_suffix(".f0.pt")).squeeze(0)
-        # cvec = pt_load(path.with_suffix(".cvec.pt")).squeeze(0)
-        # ----origin
+        mel = load('mel', lambda: pt_load(path, 'mel', mmap=True).T)
+        rms = load('rms', lambda: pt_load(path, 'rms', mmap=True))
+        f0 = load('f0', lambda: pt_load(path, 'f0', mmap=True))
+        cvec = load('cvec', lambda: pt_load(path, 'cvec', mmap=True))
 
         frame_len = mel.shape[0]
         cvec = linear_interpolate_tensor(cvec, frame_len)
