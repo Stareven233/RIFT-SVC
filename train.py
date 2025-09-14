@@ -21,14 +21,15 @@ uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
 uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$name = "fritia"
-$override = @("training.run_name=${name}-r3", "training.max_steps=3520","training.decay_step=800","training.test_per_steps=800")
+$overrides = @("training.run_name=test", "training.max_steps=23","training.decay_step=500","training.test_per_steps=1000","training.batch_size_per_gpu=2")
 $name = "megumin"
-$override = @("training.run_name=${name}-r2", "training.max_steps=5200","training.decay_step=1500","training.test_per_steps=1000")
+$overrides = @("training.run_name=${name}-r2", "training.max_steps=3200","training.decay_step=1000","training.test_per_steps=1000")
+$name = "fritia"
+$overrides = @("training.run_name=${name}-r3", "training.max_steps=1520","training.decay_step=500","training.test_per_steps=1000")
 
-uv run train.py name=$name @override training.resume_from_checkpoint=ckpts/megumin-r2/model-step\=2999.ckpt
-uv run train.py name=$name $override
-uv run train.py name=$name @override training.pretrained_path=ckpts/megumin-r2/model-step\=1059.ckpt
+uv run train.py name=$name $overrides
+uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-r3/model-step\=2000.ckpt
+uv run train.py name=$name @overrides training.pretrained_path=ckpts/${name}-r3/model-step\=1059.ckpt
 uv run train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
@@ -149,9 +150,6 @@ def main(cfg: DictConfig):
 
     # Logger selection based on config
     logger_type = cfg.training.get('logger', 'wandb').lower()
-    # Update checkpoint directory to use run_name
-    checkpoint_callback.dirpath = ckpt_dir
-    
     if logger_type == 'wandb':
         # Use Weights & Biases logger
         logger = WandbLogger(

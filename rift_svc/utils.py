@@ -5,6 +5,7 @@ import time
 from typing import Any
 import re
 import inspect
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -385,14 +386,15 @@ class EnsureFinalValidationCallback(callbacks.Callback):
         # 如果最后一次验证不是在最后一步，则手动触发一次验证
         if self.last_val_step != current_step:
             print(f"⚡ Final validation not at last step ({self.last_val_step} vs {current_step}). Triggering final validation...")
-            # 手动运行验证
+            # 手动运行验证，此时 trainer.state.fn==TrainerFn.VALIDATING 不能依靠ModelCheckpoint进行保存
             trainer.validate(pl_module, trainer.val_dataloaders, verbose=False)
             # 获取 ModelCheckpoint 实例
             checkpoint_callbacks = [cb for cb in trainer.callbacks if isinstance(cb, callbacks.ModelCheckpoint)]
-            for cb in checkpoint_callbacks:
-                # 模拟验证结束钩子，让 checkpoint 判断是否要保存
-                cb.on_validation_end(trainer, pl_module)
-
+            if len(checkpoint_callbacks) < 0:
+                print(f'[{self.__class__.__name__}] No valid ModelCheckpoint!')
+            cb = checkpoint_callbacks[0]
+            path = Path(cb.dirpath, f'final-step={current_step}.ckpt')
+            trainer.save_checkpoint(path, weights_only=cb.save_weights_only)
 
 # state dict helpers
 
