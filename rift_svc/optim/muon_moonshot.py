@@ -187,7 +187,8 @@ class Muon(torch.optim.Optimizer):
           g = g.add(buf, alpha=momentum)
         else:
           g = buf
-        u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+        # u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+        u = zeropower_via_newtonschulz5(torch.sign(g), steps=group["ns_steps"])
 
         # scale update
         adjusted_lr = self.adjust_lr_for_muon(lr, p.shape)

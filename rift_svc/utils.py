@@ -406,7 +406,7 @@ def load_state_dict(model, state_dict, strict=False):
     return model.load_state_dict(state_dict, strict=strict)
 
 
-ckpt_step_patten = re.compile(r'(?<=model-step\=)\d+')  # model-step=180000.ckpt
+ckpt_step_patten = re.compile(r'(?<=-step\=)\d+')  # model-step=180000.ckpt
 
 _original_save_hp = LightningModule.save_hyperparameters
 
