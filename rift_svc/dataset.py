@@ -39,7 +39,8 @@ class SVCDataset(Dataset):
         split = "train",
         use_cvec_downsampled: bool = False,
         cvec_downsample_rate: int = 2,
-        lazy=False,
+        n_samples = None,
+        lazy = False,
     ):
         self.data_dir = Path(data_dir)
         self.max_frame_len = max_frame_len
@@ -51,7 +52,7 @@ class SVCDataset(Dataset):
         self.num_speakers = len(speakers)
         self.spk2idx = {spk: idx for idx, spk in enumerate(speakers)}
         self.split = split
-        self.samples = meta[f"{split}_audios"]
+        self.samples = meta[f"{split}_audios"][:n_samples]
         self.use_cvec_downsampled = use_cvec_downsampled
         self.cvec_downsample_rate = cvec_downsample_rate
         self.cache = self._load_cache_lazy(lazy)

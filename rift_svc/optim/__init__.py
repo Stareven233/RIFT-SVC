@@ -68,7 +68,7 @@ def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, 
             max_steps = kwargs['max_steps']
             min_lr = kwargs.get('min_lr', 0.0)
             scheduler = lr_scheduler.LinearWarmupDecayLR(optimizer, warmup_steps, max_steps, min_lr=min_lr)
-        case 'moun':
+        case 'muon':
             pm, po = get_params_for_muon(model)
             # 笨办法兼容optim_groups
             warmup_ratio = warmup_steps / kwargs['max_steps']
@@ -76,9 +76,8 @@ def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, 
             # scheduler = lr_scheduler.cosine_annealing(optimizer, lr, kwargs['max_steps'], warmup_ratio, decay_rate=kwargs['gamma'])
             scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
         case 'adamuon' if not lora_training:
-            optimizer = AdaMuonWrapper(model, lr, weight_decay, rank=0, world_size=1)
-            max_steps = kwargs['max_steps']
-            min_lr = kwargs.get('min_lr', 0.0)
+            optimizer = AdaMuonWrapper(model, lr, betas, weight_decay, rank=0, world_size=1)
+            warmup_ratio = warmup_steps / kwargs['max_steps']
             scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
         case _:
             raise ValueError(f'Invalid optimizer type: {optimizer_type} with {lora_training=}')

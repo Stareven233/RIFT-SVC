@@ -1,8 +1,6 @@
-'''from ddsp'''
-
 from dataclasses import dataclass
 from typing import Any, Type, Callable, Optional
-import itertools
+from collections import OrderedDict
 
 from torch import Tensor
 from torch.optim import Optimizer
@@ -10,7 +8,7 @@ from torch.optim import Optimizer
 
 @dataclass
 class OptimizerSpec:
-    """Spec for creating an optimizer that is part of a `ChainedOptimizer`."""
+    '''Spec for creating an optimizer that is part of a `ChainedOptimizer`.'''
 
     class_type: Type[Optimizer]
     init_args: Optional[dict[str, Any]]
@@ -18,35 +16,62 @@ class OptimizerSpec:
 
 
 class ChainedOptimizer(Optimizer):
-    """
+    '''
     A wrapper around multiple optimizers that allows for chaining them together.
     The optimizers are applied in the order they are passed in the constructor.
     Each optimizer is responsible for updating a subset of the parameters, which
     is determined by the `param_filter` function. If no optimizer is found for a
     parameter group, an exception is raised.
-    """
+    '''
 
     def __init__(
         self,
         optimizers: list[Optimizer],
         optimizer_specs: list[OptimizerSpec],
-        lr: float,
-        weight_decay: float,
+        # lr: float,
+        # weight_decay: float,
     ):
         self.optimizers = optimizers
         self.optimizer_specs = optimizer_specs
-        params = list(itertools.chain(*(op.param_groups for op in optimizers)))
-        defaults = dict(lr=lr, weight_decay=weight_decay)
-        super().__init__(params, defaults)
+        # params = list(set(itertools.chain.from_iterable(
+        #     [group['params'] for op in self.optimizers for group in op.param_groups]
+        # )))
+        # defaults = dict(lr=lr, weight_decay=weight_decay)
+        # super().__init__(params, defaults)
+        # super().__init__([], {})  # 空参数 + 空 defaults —— 仅用于类型兼容
+
+        # Use first optimizer's defaults (safe & practical)
+        self.defaults = optimizers[0].defaults if optimizers else {}
+        # Step counter
+        self._step_count = 0
+        # 手动初始化 PyTorch 2.x+ 要求的 hook 属性
+        self._optimizer_state_dict_pre_hooks = OrderedDict()
+        self._optimizer_state_dict_post_hooks = OrderedDict()
+        self._optimizer_load_state_dict_pre_hooks = OrderedDict()
+        self._optimizer_load_state_dict_post_hooks = OrderedDict()
+
+
+    @property
+    def param_groups(self):
+        # 展平所有优化器的 param_groups
+        return [group for opt in self.optimizers for group in opt.param_groups]
+
+    @property
+    def state(self):
+        # 合并所有子优化器的 state 字典
+        merged_state = dict()
+        for opt in self.optimizers:
+            merged_state.update(opt.state)
+        return merged_state
 
     def state_dict(self) -> dict[str, Any]:
         return {
-            "optimizers": [opt.state_dict() for opt in self.optimizers],
+            'optimizers': [opt.state_dict() for opt in self.optimizers],
             **super().state_dict(),
         }
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
-        optimizers = state_dict.pop("optimizers")
+        optimizers = state_dict.pop('optimizers')
         super().load_state_dict(state_dict)
         for i in range(len(self.optimizers)):
             self.optimizers[i].load_state_dict(optimizers[i])
@@ -55,14 +80,7 @@ class ChainedOptimizer(Optimizer):
         for opt in self.optimizers:
             opt.zero_grad(set_to_none=set_to_none)
 
-    def _copy_lr_to_optimizers(self) -> None:
-        for param_group in self.param_groups:
-            indices = param_group["optimizer_and_param_group_indices"]
-            for optimizer_idx, param_group_idx in indices:
-                self.optimizers[optimizer_idx].param_groups[param_group_idx]["lr"] = param_group["lr"]
-
     def step(self, closure=None) -> None:
-        self._copy_lr_to_optimizers()
         for opt in self.optimizers:
             opt.step(closure)
 
@@ -75,10 +93,10 @@ class ChainedOptimizer(Optimizer):
 
         # Split the params for each optimzier
         params_for_optimizers = [[] for _ in self.optimizer_specs]
-        params = param_group["params"]
-        indices = param_group["optimizer_and_param_group_indices"] = set()
+        params = param_group['params']
+        indices = param_group['optimizer_and_param_group_indices'] = set()
         for param in params:
-            assert isinstance(param, Tensor), f"Expected a Tensor, got {type(param)}"
+            assert isinstance(param, Tensor), f'Expected a Tensor, got {type(param)}'
             found_optimizer = False
             for index, spec in enumerate(self.optimizer_specs):
                 if spec.param_filter is None or spec.param_filter(param):
@@ -87,9 +105,37 @@ class ChainedOptimizer(Optimizer):
                     found_optimizer = True
                     break
             if not found_optimizer:
-                raise ValueError("No valid optimizer found for the given parameter group")
+                raise ValueError('No valid optimizer found for the given parameter group')
 
         # Add the selected param group to the optimizers
         for optimizer, selected_params in zip(self.optimizers, params_for_optimizers):
             if selected_params:
-                optimizer.add_param_group({"params": selected_params})
+                optimizer.add_param_group({'params': selected_params})
+
+    def register_state_dict_pre_hook(self, hook: Callable) -> Any:
+        handles = []
+        for opt in self.optimizers:
+            if hasattr(opt, 'register_state_dict_pre_hook'):
+                handle = opt.register_state_dict_pre_hook(hook)
+                handles.append(handle)
+        return handles
+
+    def register_state_dict_post_hook(self, hook: Callable) -> Any:
+        handles = []
+        for opt in self.optimizers:
+            if hasattr(opt, 'register_state_dict_post_hook'):
+                handle = opt.register_state_dict_post_hook(hook)
+                handles.append(handle)
+        return handles
+
+    def _get_state_for_param(self, p):
+        for opt in self.optimizers:
+            if p in opt.state:
+                return opt.state[p]
+        return None
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({[repr(opt) for opt in self.optimizers]})'
+
+    def __str__(self):
+        return self.__repr__()
