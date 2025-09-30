@@ -37,6 +37,8 @@ class ChainedOptimizer(Optimizer):
         #     [group['params'] for op in self.optimizers for group in op.param_groups]
         # )))
         # defaults = dict(lr=lr, weight_decay=weight_decay)
+
+        # TODO 还是得继承Optimizer并调用init初始化，不然太麻烦
         # super().__init__(params, defaults)
         # super().__init__([], {})  # 空参数 + 空 defaults —— 仅用于类型兼容
 

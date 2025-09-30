@@ -54,7 +54,8 @@ def divide_optim_groups(model, lr, weight_decay, lora_training=False):
 
 def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, lora_training=False, **kwargs):
     optim_groups = divide_optim_groups(model, lr, weight_decay, lora_training)
-    if kwargs.get('global_step', -1) != -1:
+    global_step = kwargs.get('global_step', -1)
+    if global_step != -1:
         # resuming an optimizer
         for g in optim_groups:
             g['initial_lr'] = g['lr']
@@ -74,11 +75,14 @@ def get_optimizer(optimizer_type, model, lr, betas, weight_decay, warmup_steps, 
             warmup_ratio = warmup_steps / kwargs['max_steps']
             optimizer = Muon(lr, weight_decay, pm, adamw_params=po, optim_groups=optim_groups)
             # scheduler = lr_scheduler.cosine_annealing(optimizer, lr, kwargs['max_steps'], warmup_ratio, decay_rate=kwargs['gamma'])
-            scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
+            scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=global_step)
         case 'adamuon' if not lora_training:
             optimizer = AdaMuonWrapper(model, lr, betas, weight_decay, rank=0, world_size=1)
+            if global_step != -1:
+                for g in optimizer.param_groups:
+                    g['initial_lr'] = g['lr']
             warmup_ratio = warmup_steps / kwargs['max_steps']
-            scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=kwargs['global_step'])
+            scheduler = lr_scheduler.warmup_stage_decay(optimizer, kwargs['decay_step'], kwargs['max_steps'], warmup_ratio=warmup_ratio, decay_ratio=0.1, decay_rate=kwargs['gamma'], last_steps=global_step)
         case _:
             raise ValueError(f'Invalid optimizer type: {optimizer_type} with {lora_training=}')
 

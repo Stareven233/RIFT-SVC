@@ -33,7 +33,7 @@ training:
   grad_accumulation_steps: 1
   max_grad_norm: 0
   log_every_n_steps: 10
-  log_media_per_steps: 1000
+  log_media_per_steps: ${training.test_per_steps}
   resume_from_checkpoint: ~
   pretrained_path: pretrained/pretrain-v3_dit-512-8.ckpt
   # save_weights_only: false
