@@ -1,25 +1,33 @@
 r'''
 跟ddsp差不多，更贴近参考的内容（唱法）及响度，训练慢一些，都有音色泄露
 二者都利用cvec抽取语义信息作为条件，reflow从噪声开始预测mel频谱(只是里面的预测模型用的不一样)，再由vocoder合成为audio，音色泄露或许是reflow的通病？
-rift更不受输入唱法影响？更擅长频谱图重建？推理快
+rift更不受输入唱法影响？更擅长频谱图重建？推理快。有时会比ddsp更好，例如黄昏中“昏>暗<中...”，ddsp会用力过猛
 
 cd D:\Code\projects\RIFT-SVC
 nvidia-smi
 
-$model = "ckpts/fritia/model-step=6000.ckpt"
-$model = "ckpts/megumin/model-step=4000.ckpt"
-$indir = "D:\Document\ai-sings\銀の龍の背に乗って"
-$filename = "日本的国宝中岛美雪-骑在银龙的背上_vocals_noreverb_Vocals.flac"
+$model = "ckpts/megumin/model-step=5010.ckpt"
+$model = "ckpts/megumin-768/final-step=7600.ckpt"
+$model = "ckpts/fritia/final-step=1520.ckpt"
 $indir = "D:\Document\ai-sings\LETTER"
 $filename = "咪咕音乐-6005970A0NP_Vocals_vocals_noreverb.flac"
-$indir = "D:\Document\ai-sings\God Knows"
-$filename = "4K高清修复音源升级God Knows_Vocals_vocals_noreverb.flac"
+$indir = "D:\Document\ai-sings\銀の龍の背に乗って"
+$filename = "日本的国宝中岛美雪-骑在银龙的背上_vocals_noreverb_Vocals.flac"
 $key=0
+$indir = "D:\Document\ai-sings\God Knows"
+$filename = "4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
+$indir = "D:\Document\ai-sings\黄昏"
+$filename = "黄昏_人声2.flac"
+$indir = "D:\Document\ai-sings\虫儿飞"
+$filename = "童声歌唱家冯晓菲奶声虫儿飞带你净化心灵_Vocals_vocals_noreverb.flac"
 
-& uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key
+& uv run infer.py -m $model -i "$indir/$filename" -o "$indir/test.flac" -s fritia-new -bs 8 -k $key
 & uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 8 -k $key
+& uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.1 --spk-cfg-strength 0.2 --skip-cfg-strength 0.1 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 '''
+import enum
+from pathlib import Path
 
 import click
 import librosa
@@ -27,13 +35,13 @@ import numpy as np
 import pyloudnorm as pyln
 import torch
 import torchaudio
-from pathlib import Path
 from tqdm import tqdm
 from torch.amp import autocast
 
 from rift_svc import DiT, RF
 from rift_svc.feature_extractors import HubertModelWithFinalProj, RMSExtractor, get_mel_spectrogram
 from rift_svc.nsf_hifigan.vocoder import load_model_vocoder
+from rift_svc.nsf_hifigan.vocoder import DotDict
 from rift_svc.rmvpe import RMVPE
 from rift_svc.utils import linear_interpolate_tensor, post_process_f0, f0_ensemble, f0_ensemble_light, get_f0_pw, get_f0_pm
 from rift_svc.utils import ckpt_step_patten
@@ -41,6 +49,21 @@ from slicer import Slicer
 
 
 torch.set_grad_enabled(False)
+
+
+class DefaultParams(enum.Enum):
+  SLICER_THRESHOLD = -30.0
+
+
+def gen_metadata(args: DotDict):
+  *_, ckpt = args.m.split('/')  # ckpts/fritia/model-step=10000.ckpt
+  m = ckpt_step_patten.search(ckpt)
+  assert m is not None
+  s = int(m.group(0)) / 1000
+  s = f'rift@{args.s}_{s}ks_{args.k}k'
+  if args.st != DefaultParams.SLICER_THRESHOLD.value:
+    s += f'_{args.st}st'
+  return s
 
 
 def extract_state_dict(ckpt):
@@ -501,7 +524,7 @@ def pad_tensor_to_length(tensor, length):
 @click.option('--restore-loudness', default=True, help='Restore loudness to original')
 @click.option('--fade-duration', type=float, default=20.0, help='Fade duration in milliseconds')
 @click.option('--robust-f0', type=int, default=0, help='Level of robust f0 filtering (0=none, 1=light, 2=aggressive)')
-@click.option('--slicer-threshold', type=float, default=-30.0, help='Threshold for audio slicing in dB')
+@click.option('--slicer-threshold', type=float, default=DefaultParams.SLICER_THRESHOLD.value, help='Threshold for audio slicing in dB')
 @click.option('--slicer-min-length', type=int, default=3000, help='Minimum length of audio segments in milliseconds')
 @click.option('--slicer-min-interval', type=int, default=100, help='Minimum interval between audio segments in milliseconds')
 @click.option('--slicer-hop-size', type=int, default=10, help='Hop size for audio slicing in milliseconds')
@@ -607,11 +630,7 @@ def main(
         out_file = Path(out_file)
         out_file.parent.mkdir(parents=True, exist_ok=True)
     else:
-        *_, ckpt = model.split('/')  # ckpts/fritia/model-step=10000.ckpt
-        m = ckpt_step_patten.search(ckpt)
-        assert m is not None
-        meta = int(m.group(0)) / 1000
-        meta = f'rift@{speaker}_{meta}ks_{key_shift}k'
+        meta = gen_metadata(DotDict(m=model, s=speaker, k=key_shift, st=slicer_threshold))
         out_file = in_file.parent / f'{in_file.stem}_{meta}.flac'
     torchaudio.save(out_file, torch.from_numpy(result_audio).unsqueeze(0), sample_rate)
     click.echo("Done!")
