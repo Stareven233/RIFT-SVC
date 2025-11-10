@@ -6,9 +6,9 @@ rift更不受输入唱法影响？更擅长频谱图重建？推理快。有时�
 cd D:\Code\projects\RIFT-SVC
 nvidia-smi
 
+$model = "ckpts/fritia/final-step=1520.ckpt"
 $model = "ckpts/megumin/model-step=5010.ckpt"
 $model = "ckpts/megumin-768/final-step=7600.ckpt"
-$model = "ckpts/fritia/final-step=1520.ckpt"
 $indir = "D:\Document\ai-sings\LETTER"
 $filename = "咪咕音乐-6005970A0NP_Vocals_vocals_noreverb.flac"
 $indir = "D:\Document\ai-sings\銀の龍の背に乗って"
@@ -18,12 +18,12 @@ $indir = "D:\Document\ai-sings\God Knows"
 $filename = "4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
 $indir = "D:\Document\ai-sings\黄昏"
 $filename = "黄昏_人声2.flac"
-$indir = "D:\Document\ai-sings\虫儿飞"
-$filename = "童声歌唱家冯晓菲奶声虫儿飞带你净化心灵_Vocals_vocals_noreverb.flac"
+$indir = "D:\Document\ai-sings\TAIDADA"
+$filename = "TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
 
-& uv run infer.py -m $model -i "$indir/$filename" -o "$indir/test.flac" -s fritia-new -bs 8 -k $key
-& uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 8 -k $key
 & uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key
+& uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 8 -k $key
+# 有噪声，用msst降噪模型试试
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.1 --spk-cfg-strength 0.2 --skip-cfg-strength 0.1 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 '''
 import enum
@@ -52,7 +52,7 @@ torch.set_grad_enabled(False)
 
 
 class DefaultParams(enum.Enum):
-  SLICER_THRESHOLD = -30.0
+  SLICER_THRESHOLD = -60.0
 
 
 def gen_metadata(args: DotDict):
@@ -60,9 +60,7 @@ def gen_metadata(args: DotDict):
   m = ckpt_step_patten.search(ckpt)
   assert m is not None
   s = int(m.group(0)) / 1000
-  s = f'rift@{args.s}_{s}ks_{args.k}k'
-  if args.st != DefaultParams.SLICER_THRESHOLD.value:
-    s += f'_{args.st}st'
+  s = f'rift@{args.s}_{s}ks_{args.k}k_{args.st}st'
   return s
 
 

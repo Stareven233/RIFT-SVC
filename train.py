@@ -21,14 +21,14 @@ uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
 uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$overrides = @("training.run_name=test", "training.max_steps=23","training.decay_step=500","training.test_per_steps=1000","training.batch_size_per_gpu=2")
-$name = "megumin"
-$overrides = @("training.run_name=${name}-r2", "training.max_steps=3200","training.decay_step=1000","training.test_per_steps=1000")
+$overrides = @("training.run_name=test", "dataset.n_samples=20", "training.max_steps=23","training.batch_size_per_gpu=2")
 $name = "fritia"
-$overrides = @("training.run_name=${name}-r3", "training.max_steps=1520","training.decay_step=500","training.test_per_steps=1000")
+$overrides = @("training.run_name=${name}-r4", "training.max_steps=2410","training.decay_step=600","training.test_per_steps=800")
+$name = "megumin"
+$overrides = @("training.run_name=${name}-r4", "training.max_steps=3600","training.decay_step=800","training.test_per_steps=800")
 
 uv run train.py name=$name $overrides
-uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-r3/model-step\=2000.ckpt
+uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-r4/model-step\=3129.ckpt
 uv run train.py name=$name @overrides training.pretrained_path=ckpts/${name}-r3/model-step\=1059.ckpt
 uv run train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
