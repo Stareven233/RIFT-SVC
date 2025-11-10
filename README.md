@@ -20,31 +20,21 @@ git clone https://github.com/Pur1zumu/RIFT-SVC.git
 cd RIFT-SVC
 ```
 
-#### 2. Create a new conda environment
+#### 2. Install environment
+* uv is required: https://docs.astral.sh/uv/getting-started/installation/
 ```bash
-conda create -n rift-svc python=3.11
-conda activate rift-svc
-```
-
-#### 3. Install torch that supports your cuda version. See [PyTorch](https://pytorch.org/get-started/locally/) for more details.
-E.g., for cuda 12.1, use:
-```bash
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-#### 4. Install other dependencies
-```bash
-pip install -r requirements.txt
-```
+uv sync
+source .venv/bin/activate
+``` 
 
 ## Models and Data Preparation
 
-#### 5. Download pretrained models for feature extraction and vocoder.
+#### 3. Download pretrained models for feature extraction and vocoder.
 ```bash
 python pretrained/download.py   
 ```
 
-#### 6. Download pretrained weights for fine-tuning.
+#### 4. Download pretrained weights for fine-tuning.
 
 | Model | Command |
 | --- | --- |
@@ -53,7 +43,7 @@ python pretrained/download.py
 | pretrain-v3_dit-1024-16 | wget https://huggingface.co/Pur1zumu/RIFT-SVC-pretrained/resolve/main/pretrain-v3_dit-1024-16.ckpt -O pretrained/pretrain-v3_dit-1024-16.ckpt |
 
 
-#### 7. Prepare data and extract features.
+#### 5. Prepare data and extract features.
 You should structure your data like this:
 ```
 data/
@@ -100,7 +90,7 @@ where `$DATA_DIR` is the path to your data directory (e.g., `data/finetune`) and
 
 ## Training
 
-#### 8. Start Finetuning
+#### 6. Start Finetuning
 
 We implement both Tensorboard and Wandb for logging.
 
@@ -182,7 +172,7 @@ Then, you can resume training from a checkpoint later by adding the following ar
 
 ## Inference
 
-#### 9. Inference
+#### 7. Inference
 Basic inference command:
 ```bash
 python infer.py \
@@ -205,9 +195,9 @@ python infer.py \
 --key-shift 0 \
 --infer-steps 32 \
 --batch-size 4 \
---ds-cfg-strength 0.1 \
---spk-cfg-strength 0.2 \
---skip-cfg-strength 0.1 \
+--ds-cfg-strength 0.2 \
+--spk-cfg-strength 0.8 \
+--skip-cfg-strength 0.0 \
 --cfg-skip-layers 6 \
 --cfg-rescale 0.7 \
 --cvec-downsample-rate 2
@@ -221,9 +211,9 @@ python infer.py \
 - `--key-shift`: Pitch shift in semitones (default: 0).
 - `--infer-steps`: The number of inference steps (default: 32). Higher values may produce better quality but take longer.
 - `--batch-size`: Batch size for parallel inference (default: 1). Higher values can speed up inference by processing multiple segments simultaneously, but require more VRAM.
-- `--ds-cfg-strength`: Downsampled content vector guidance strength (default: 0.0). Controls the emphasis on content fidelity. We recommend a initial trial value of 0.1.
-- `--spk-cfg-strength`: Speaker guidance strength (default: 0.0). Higher values enhance speaker characteristics. We recommend a initial trial value of 0.2.
-- `--skip-cfg-strength`: Skip layer guidance strength (default: 0.0). Affects how much the targeted intermediate layer's features are rendered on the output. We recommend a initial trial value of 0.1.
+- `--ds-cfg-strength`: Downsampled content vector guidance strength (default: 0.2). Controls the emphasis on content fidelity.
+- `--spk-cfg-strength`: Speaker guidance strength (default: 0.8). Higher values enhance speaker characteristics.
+- `--skip-cfg-strength`: Skip layer guidance strength (default: 0.0). Affects how much the targeted intermediate layer's features are rendered on the output.
 - `--cfg-skip-layers`: Layer to skip for classifier-free guidance (default: None). We recommend a initial trial value of (number of layers) / 2, which is 6 for 12-layer model. Since different layers have different functions, this value can be adjusted to find the best balance. For an illustration, if a layer processes prosody-related features, then skipping this layer will make the output has more prosody characteristics.
 - `--cfg-rescale`: Classifier-free guidance rescale factor (default: 0.7). This is used to prevent over-saturation of the guidance [13].
 - `--cvec-downsample-rate`: Downsampling rate for negative content vector creation (default: 2).
