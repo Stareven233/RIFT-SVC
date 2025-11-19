@@ -25,7 +25,7 @@ $overrides = @("training.run_name=test", "dataset.n_samples=20", "training.max_s
 $name = "fritia"
 $overrides = @("training.run_name=${name}-r4", "training.max_steps=2410","training.decay_step=600","training.test_per_steps=800")
 $name = "megumin"
-$overrides = @("training.run_name=${name}-r4", "training.max_steps=3600","training.decay_step=800","training.test_per_steps=800")
+$overrides = @("training.run_name=${name}-r5", "training.max_steps=3600","training.decay_step=800","training.test_per_steps=800")
 
 uv run train.py name=$name $overrides
 uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-r4/model-step\=3129.ckpt
@@ -87,13 +87,13 @@ def main(cfg: DictConfig):
     resume_ckpt = cfg.training.get('resume_from_checkpoint', None)
     pre_ckpt = cfg.training.get('pretrained_path', None)
     if resume_ckpt is None and pre_ckpt is not None:
-        state_dict = torch.load(cfg.training.pretrained_path, map_location='cuda', weights_only=False)
+        state_dict = torch.load(pre_ckpt, map_location='cuda', weights_only=False)
         # print(f'{state_dict.keys()=}')  # (['epoch', 'global_step', 'pytorch-lightning_version', 'state_dict', 'loops', 'hparams_name', 'hyper_parameters'])
         if 'state_dict' in state_dict:
             state_dict = state_dict['state_dict']
         # Load only model weights, allowing mismatched keys for speaker embeddings
         missing_keys, unexpected_keys = load_state_dict(rf, state_dict)
-        print(f"Loaded pretrained model from {cfg.training.pretrained_path}")
+        print(f"Loaded pretrained model from {pre_ckpt}")
         if missing_keys:
             print(f"Missing keys: {missing_keys}")
         if unexpected_keys:
