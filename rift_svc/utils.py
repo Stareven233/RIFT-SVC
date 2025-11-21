@@ -352,9 +352,10 @@ class CustomProgressBar(callbacks.TQDMProgressBar):
 
         # Update the progress bar with loss, elapsed time, remaining time, and remaining steps
         self.train_progress_bar.set_postfix({
-            "loss": f"{outputs['loss'].item():.4f}",
-            "time": elapsed_time_str + "/" + remaining_time_str,
-            "steps": str(remaining_steps) + "/" + str(total_steps)
+            'loss': f'{outputs['loss'].item():.3f}',
+            'time': elapsed_time_str + '/' + remaining_time_str,
+            # 'steps': str(remaining_steps) + '/' + str(total_steps)
+            'step': str(current_step)
         })
 
 

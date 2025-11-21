@@ -9,6 +9,7 @@ nvidia-smi
 $model = "ckpts/fritia/final-step=1520.ckpt"
 $model = "ckpts/megumin/model-step=5010.ckpt"
 $model = "ckpts/megumin-768/final-step=7600.ckpt"
+$model = "ckpts/megumin-xpred-r3/final-step=7600.ckpt"
 $key=0
 $indir = "D:\Document\ai-sings\LETTER"
 $filename = "咪咕音乐-6005970A0NP_Vocals_vocals_noreverb.flac"
@@ -16,12 +17,12 @@ $indir = "D:\Document\ai-sings\God Knows"
 $filename = "4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
 $indir = "D:\Document\ai-sings\黄昏"
 $filename = "黄昏_人声2.flac"
-$indir = "D:\Document\ai-sings\TAIDADA"
-$filename = "TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
 $indir = "D:\Document\ai-sings\銀の龍の背に乗って"
 $filename = "骑在银龙的背上_vnV.flac"
+$indir = "D:\Document\ai-sings\TAIDADA"
+$filename = "TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
 
-& uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key
+& uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key --infer-steps 32
 & uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 8 -k $key
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.0 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.2 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
@@ -53,6 +54,7 @@ torch.set_grad_enabled(False)
 
 class DefaultParams(enum.Enum):
   SLICER_THRESHOLD = -60.0
+  INFER_STEPS = 32
 
 
 def gen_metadata(args: DotDict):
@@ -61,6 +63,8 @@ def gen_metadata(args: DotDict):
   assert m is not None
   s = int(m.group(0)) / 1000
   s = f'rift@{args.s}_{s}ks_{args.k}k_{args.st}st'
+  if args.step != DefaultParams.INFER_STEPS.value:
+    s = f'{s}_{args.step}step'
   return s
 
 
@@ -511,7 +515,7 @@ def pad_tensor_to_length(tensor, length):
 @click.option('-s', '--speaker', type=str, required=True, help='Target speaker')
 @click.option('-k', '--key-shift', type=int, default=0, help='Pitch shift in semitones')
 @click.option('--device', type=str, default=None, help='Device to use (cuda/cpu)')
-@click.option('--infer-steps', type=int, default=32, help='Number of inference steps')
+@click.option('--infer-steps', type=int, default=DefaultParams.INFER_STEPS, help='Number of inference steps')
 @click.option('--ds-cfg-strength', type=float, default=0.2, help='Downsampled content vector guidance strength')
 @click.option('--spk-cfg-strength', type=float, default=0.8, help='Speaker guidance strength')
 @click.option('--skip-cfg-strength', type=float, default=0.0, help='Skip layer guidance strength')
@@ -628,7 +632,7 @@ def main(
         out_file = Path(out_file)
         out_file.parent.mkdir(parents=True, exist_ok=True)
     else:
-        meta = gen_metadata(DotDict(m=model, s=speaker, k=key_shift, st=slicer_threshold))
+        meta = gen_metadata(DotDict(m=model, s=speaker, k=key_shift, st=slicer_threshold, step=infer_steps))
         out_file = in_file.parent / f'{in_file.stem}_{meta}.flac'
     torchaudio.save(out_file, torch.from_numpy(result_audio).unsqueeze(0), sample_rate)
     click.echo("Done!")

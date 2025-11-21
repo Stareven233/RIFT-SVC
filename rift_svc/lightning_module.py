@@ -90,7 +90,7 @@ class RIFTSVCLightningModule(LightningModule):
         self._log_scalar("train/loss", loss.item(), prog_bar=True)
         
         return loss
-    
+
     def on_validation_start(self):
         if hasattr(self.optimizer, 'eval'):
             self.optimizer.eval()
@@ -125,6 +125,12 @@ class RIFTSVCLightningModule(LightningModule):
             # Log metrics - compatible with both loggers
             for metric_name, metric_value in metrics.items():
                 self._log_scalar(metric_name, metric_value)
+        if self.global_rank != 0:
+            return
+        res = ';\t'.join((f'{k}:{v:.4f}' for k, v in metrics.items()))
+        optimizer = self.trainer.optimizers[0]
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f'Current Learning Rate: {current_lr}\n{res}', flush=True)
 
     def validation_step(self, batch, batch_idx, log=True):
         """
