@@ -116,34 +116,59 @@ def warmup_stable_decay(optimizer: Optimizer, max_steps: int, warmup_ratio=0, de
   scheduler = lr_scheduler.LambdaLR(optimizer, inner)
   return scheduler
 
+def warmup_decay_anneal(optimizer: Optimizer, max_steps: int, warmup_ratio=0.05, decay_step: int|list[int]|None=None, decay_rate=0.5, anneal_ratio=0.2, last_step=-1):
+  '''带阶段式学习率衰减的WSD调度   
+  学习率缓慢上升_学习率阶段性下降_学习率退火  
+  decay_step: int(固定步数下调学习率) / list(列出该下调学习率的step) / None(去掉阶段性下降阶段)
+  '''
 
-def warmup_stage_decay(optimizer: Optimizer, decay_per_steps: int, max_steps: int, warmup_ratio=0.05, decay_ratio=0.2, decay_rate=0.1, last_steps=-1):
+  # 学习率按decay_step固定值、指定值分为两种具体 decay 类型
+  fixed_step = isinstance(decay_step, int)
+  if decay_step is None or not fixed_step and len(decay_step) == 0:
+    decay_step = max_steps + 1
+  elif not fixed_step:
+    decay_step = sorted(decay_step)
   n_warmup = max_steps * warmup_ratio
-  n_warmup = max(0, min(n_warmup, decay_per_steps))
-  n_decay = max_steps * decay_ratio
-  decay_steps = max_steps - n_decay
+  n_warmup = max(0, min(n_warmup, decay_step if fixed_step else decay_step[0]))
+  n_anneal = max_steps * anneal_ratio
+  anneal_step = max_steps - n_anneal
   rate = 1.0
+  # 恢复训练时根据当前步数重置rate
   last_decay_step = n_warmup
-  if last_steps > n_warmup:
-    n = (last_steps-n_warmup) // decay_per_steps
+  if last_step > n_warmup:
+    if fixed_step:
+      n = (last_step-n_warmup) // decay_step
+      last_decay_step += decay_step * n
+    else:
+      n = 0
+      for d in decay_step:
+        if last_step < d:
+          break
+        n += 1
+      decay_step = decay_step[n:]
     rate = decay_rate**n
-    last_decay_step += decay_per_steps * n
 
   def inner(step):
     nonlocal rate
     nonlocal last_decay_step
-    if step < n_warmup:  # linear warmup
+    # # linear warmup
+    if step < n_warmup:
       return step / n_warmup
-    elif step < decay_steps and (step - last_decay_step) >= decay_per_steps:
-      last_decay_step = step
-      rate *= decay_rate
-    elif step >= decay_steps:
-      t = (step-decay_steps) / n_decay  # (0 -> 1)
+    # annealing
+    elif step >= anneal_step:
+      t = (step-anneal_step) / n_anneal  # (0 -> 1)
       t = 1 - t**0.5  # (1 -> 0)
       return rate * t
+    # decay
+    elif fixed_step and (step - last_decay_step) >= decay_step:
+      rate *= decay_rate
+      last_decay_step = step
+    elif step > decay_step[0]:
+      rate *= decay_rate
+      decay_step.pop(0)
     return rate
 
-  scheduler = lr_scheduler.LambdaLR(optimizer, inner, last_steps)
+  scheduler = lr_scheduler.LambdaLR(optimizer, inner, last_step)
   return scheduler
 
 

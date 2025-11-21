@@ -21,20 +21,28 @@ uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
 uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$overrides = @("training.run_name=test", "dataset.n_samples=20", "training.max_steps=23","training.batch_size_per_gpu=2")
+$overrides = @("training.run_name=test","dataset.n_samples=20","training.max_steps=23","training.batch_size_per_gpu=2")
 $name = "fritia"
-$overrides = @("training.run_name=${name}-r4", "training.max_steps=2410","training.decay_step=600","training.test_per_steps=800")
+$overrides = @("training.run_name=${name}-r4","training.max_steps=2410","training.decay_step=600","training.test_per_steps=800")
 $name = "megumin"
-$overrides = @("training.run_name=${name}-r5", "training.max_steps=3600","training.decay_step=800","training.test_per_steps=800")
+$overrides = @("training.run_name=${name}-xpred-r2","training.max_steps=5200","training.decay_step=1500","training.test_per_steps=1000")
+$overrides = @("training.run_name=${name}-xpred","training.learning_rate=5e-5","training.max_steps=20200","training.decay_step=29000","training.test_per_steps=1000")
 
-uv run train.py name=$name $overrides
-uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-r4/model-step\=3129.ckpt
-uv run train.py name=$name @overrides training.pretrained_path=ckpts/${name}-r3/model-step\=1059.ckpt
+uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-xpred/model-step\=4000.ckpt
+uv run train.py name=$name @overrides
+uv run train.py name=$name @overrides training.pretrained_path=ckpts/${name}-r2/model-step\=1059.ckpt
 uv run train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
+Write-Host "等待10分钟..."
+Start-Sleep -Seconds 600
 tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
+cd D:\Code\projects\RIFT-SVC
 
 #todo
+lambda学习率调度
+Muon改为真正继承Optimizer
+改造配置读取方式，模糊掉 name 的输入
+lazy cache, 每个样本读取时完整加载
 dataset转为iter类型，或者多倍，减少epoch交替时速度降低
 音区偏移
 '''
@@ -105,7 +113,6 @@ def main(cfg: DictConfig):
     if cfg.training.get('freeze_adaln_and_tembed', True):
         rf.transformer.freeze_adaln_and_tembed()
 
-    warmup_steps = int(cfg.training.max_steps * cfg.training.warmup_ratio)
     global_step = -1
     if resume_ckpt or pre_ckpt:
         m = ckpt_step_patten.search(resume_ckpt or pre_ckpt)
@@ -116,13 +123,9 @@ def main(cfg: DictConfig):
         cfg.training.learning_rate, 
         eval(cfg.training.betas), 
         cfg.training.weight_decay, 
-        warmup_steps,
-        max_steps=cfg.training.max_steps,
-        min_lr=cfg.training.get('min_lr', 0.0),
-        decay_step=cfg.training.decay_step,
-        gamma=cfg.training.gamma,
-        global_step=global_step,
         lora_training=cfg.training.get('lora_training', False),
+        global_step=global_step,
+        **cfg.training,
     )
     OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
     model = RIFTSVCLightningModule(

@@ -17,14 +17,16 @@ vocoder:
 
 training:
   run_name: test
-  learning_rate: 8.0e-5
+  learning_rate: 1.0e-4
   batch_size_per_gpu: 80
   max_steps: 5200
   decay_step: 1500
-  test_per_steps: 1000
-  save_per_steps: ${training.test_per_steps}
-  gamma: 0.6
+  decay_rate: 0.6
   warmup_ratio: 0.05
+  anneal_ratio: 0.2
+  test_per_steps: 1000
+  save_per_steps: 5000
+  # save_per_steps: ${training.test_per_steps}
   weight_decay: 0.01
   num_workers: 4
   optimizer_type: adamuon
@@ -36,8 +38,8 @@ training:
   log_media_per_steps: ${training.test_per_steps}
   resume_from_checkpoint: ~
   pretrained_path: pretrained/pretrain-v3_dit-512-8.ckpt
-  # save_weights_only: false
-  save_weights_only: true
+  save_weights_only: false
+  # save_weights_only: true
   save_on_interruption: true
   freeze_adaln_and_tembed: false
   eval_sample_steps: 32
