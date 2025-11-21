@@ -23,22 +23,23 @@ training:
   # optimizer_type: adamwsf; learning_rate: 5e-5; weight_decay: 0.01; batch_size_per_gpu: 32; warmup_ratio: 0.05
   # 6000步就差不多了
   run_name: test
-  learning_rate: 8.0e-5
+  learning_rate: 1.0e-4
   batch_size_per_gpu: 36
   max_steps: 10000
   decay_step: 1000  # 衰减间隔
+  decay_rate: 0.6
+  warmup_ratio: 0.05
+  anneal_ratio: 0.2
   test_per_steps: 1500
   save_per_steps: ${training.test_per_steps}
-  gamma: 0.6
-  warmup_ratio: 0.05
   weight_decay: 0.01
   num_workers: 4
   optimizer_type: adamuon
   betas: (0.9, 0.95)
   grad_accumulation_steps: 1
   max_grad_norm: 0
-  log_media_per_steps: ${training.test_per_steps}
   log_every_n_steps: 10
+  log_media_per_steps: ${training.test_per_steps}
   resume_from_checkpoint: ~
   pretrained_path: pretrained/pretrain-v3_dit-768-12.ckpt
   # save_weights_only: false

@@ -28,8 +28,8 @@ $name = "megumin"
 $overrides = @("training.run_name=${name}-xpred-r2","training.max_steps=5200","training.decay_step=1500","training.test_per_steps=1000")
 $overrides = @("training.run_name=${name}-xpred","training.learning_rate=5e-5","training.max_steps=20200","training.decay_step=29000","training.test_per_steps=1000")
 
-uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-xpred/model-step\=4000.ckpt
 uv run train.py name=$name @overrides
+uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-xpred/model-step\=4000.ckpt
 uv run train.py name=$name @overrides training.pretrained_path=ckpts/${name}-r2/model-step\=1059.ckpt
 uv run train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
@@ -118,14 +118,11 @@ def main(cfg: DictConfig):
         m = ckpt_step_patten.search(resume_ckpt or pre_ckpt)
         global_step = (m and int(m.group(0))) or -1
     optimizer, lr_scheduler = get_optimizer(
+        rf,
         cfg.training.optimizer_type,
-        rf, 
-        cfg.training.learning_rate, 
-        eval(cfg.training.betas), 
-        cfg.training.weight_decay, 
-        lora_training=cfg.training.get('lora_training', False),
+        cfg.training,
         global_step=global_step,
-        **cfg.training,
+        lora_training=cfg.training.get('lora_training', False),
     )
     OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
     model = RIFTSVCLightningModule(

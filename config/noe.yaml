@@ -21,6 +21,7 @@ training:
   batch_size_per_gpu: 80
   max_steps: 5200
   decay_step: 1500
+  # decay_step: [1500, 4500, 5500]
   decay_rate: 0.6
   warmup_ratio: 0.05
   anneal_ratio: 0.2
