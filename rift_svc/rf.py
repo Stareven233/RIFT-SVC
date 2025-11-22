@@ -49,6 +49,7 @@ class RF(nn.Module):
 
         self.mel_min = -12
         self.mel_max = 2
+        self.t_eps = 1e-4
 
 
     @property
@@ -171,7 +172,9 @@ class RF(nn.Module):
                 pred_rescaled = pred * (std_pred / std_cfg)
                 pred = cfg_rescale * pred_rescaled + (1 - cfg_rescale) * pred
             
-            return pred
+            # Equivalent to converting to v first and then performing cfg
+            v_pred = (pred - x) / (1.0 - t).clamp_min(self.t_eps)
+            return v_pred
 
         # Noise input
         y0 = torch.randn(batch, mel_seq_len, num_mel_channels, device=self.device)
@@ -215,7 +218,8 @@ class RF(nn.Module):
 
         t = rearrange(time, 'b -> b 1 1')
         xt = (1 - t) * x0 + t * x1
-        flow = x1 - x0
+        # Just image Transformers(JiT): https://github.com/LTH14/JiT/blob/main/denoiser.py#L56
+        flow = (x1 - xt) / (1 - t).clamp_min(self.t_eps)
 
         pred = self.transformer(
             x=xt, 
@@ -227,10 +231,15 @@ class RF(nn.Module):
             drop_speaker=drop_speaker,
             mask=mask
         )
+        v_pred = (pred - xt) / (1 - t).clamp_min(self.t_eps)
 
         # Flow matching loss
-        loss = F.mse_loss(pred, flow, reduction='none')
-        loss = loss[mask]
+        loss = F.mse_loss(v_pred, flow, reduction='none')
+        # loss = loss[mask].reshape_as(flow)
+        # 避免直接索引导致的展平： (b, n, d) -> (b*n, d)
+        loss = loss * mask.unsqueeze(-1).float()
+        # 通过加权缓解高 t 时梯度爆炸
+        loss = loss.mean(dim=(1, 2)) * (1 - time).sqrt_().clamp_min_(0.06)
 
         return loss.mean(), pred
 
