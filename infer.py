@@ -1,31 +1,33 @@
 r'''
-跟ddsp差不多，更贴近参考的内容（唱法）及响度，训练慢一些，都有音色泄露
-二者都利用cvec抽取语义信息作为条件，reflow从噪声开始预测mel频谱(只是里面的预测模型用的不一样)，再由vocoder合成为audio，音色泄露或许是reflow的通病？
-rift更不受输入唱法影响？更擅长频谱图重建？推理快。有时会比ddsp更好，例如黄昏中“昏>暗<中...”，ddsp会用力过猛
+http://music.163.com/song/media/outer/url?id=29753863.mp3
 
 cd D:\Code\projects\RIFT-SVC
 nvidia-smi
 
+$name = "aino"
+$name = "megumin"
 $model = "ckpts/fritia/final-step=1520.ckpt"
-$model = "ckpts/megumin/model-step=5010.ckpt"
-$model = "ckpts/megumin-768/final-step=7600.ckpt"
-$model = "ckpts/megumin-xpred-r3/final-step=7600.ckpt"
+$model = "ckpts/$name/extracted.ckpt"
 $key=0
-$indir = "D:\Document\ai-sings\LETTER"
-$filename = "咪咕音乐-6005970A0NP_Vocals_vocals_noreverb.flac"
-$indir = "D:\Document\ai-sings\God Knows"
-$filename = "4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
-$indir = "D:\Document\ai-sings\黄昏"
-$filename = "黄昏_人声2.flac"
-$indir = "D:\Document\ai-sings\銀の龍の背に乗って"
-$filename = "骑在银龙的背上_vnV.flac"
-$indir = "D:\Document\ai-sings\TAIDADA"
-$filename = "TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
+$dir = "D:\Document\ai-sings"
+$path = "$dir\God Knows\4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
+$path = "$dir\黄昏\黄昏_人声2.flac"
+$path = "$dir\銀の龍の背に乗って\骑在银龙的背上_vnV.flac"
+$path = "$dir\TAIDADA\TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
+$path = "$dir\虫儿飞\童声歌唱家冯晓菲奶声虫儿飞带你净化心灵_Vocals_vocals_noreverb.flac"
+$path = "$dir\最后一页\顾疚疚最后一页_Vocals_vocals.flac"
+$path = "$dir\Ending Note\Ending Note 門谷純_Vocals_vocals_noreverb.flac"
+$path2 = "$dir\Ending Note\Ending Note 門谷純_Vocals_vocals.flac"
 
-& uv run infer.py -m $model -i "$indir/$filename" -s megumin -bs 8 -k $key --infer-steps 32
-& uv run infer.py -m $model -i "$indir/$filename" -s fritia-new -bs 8 -k $key
+& uv run infer.py -m $model -i $path -i $path2  -s $name -bs 8 -k $key --infer-steps 32
+& uv run infer.py -m $model -i $path -s megumin -bs 8 -k $key --infer-steps 32
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.0 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.2 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
+
+uv run scripts/extract_model_ckpt.py $model
+$src = "C:\!ext\CODE\Project\ComfyUI-aki-v1.7\ComfyUI\models\SEEDVR2\ema_vae_fp16.safetensors"
+$target = "D:\Code\SD models\ema_vae_fp16.safetensors"
+New-Item -ItemType SymbolicLink -Path $target -Target $src
 '''
 import enum
 from pathlib import Path
@@ -36,7 +38,7 @@ import numpy as np
 import pyloudnorm as pyln
 import torch
 import torchaudio
-from tqdm import tqdm
+from tqdm import tqdm, trange
 from torch.amp import autocast
 
 from rift_svc import DiT, RF
@@ -60,8 +62,9 @@ class DefaultParams(enum.Enum):
 def gen_metadata(args: DotDict):
   *_, ckpt = args.m.split('/')  # ckpts/fritia/model-step=10000.ckpt
   m = ckpt_step_patten.search(ckpt)
-  assert m is not None
-  s = int(m.group(0)) / 1000
+  s = '0'
+  if m is not None:
+    s = int(m.group(0)) / 1000
   s = f'rift@{args.s}_{s}ks_{args.k}k_{args.st}st'
   if args.step != DefaultParams.INFER_STEPS.value:
     s = f'{s}_{args.step}step'
@@ -85,7 +88,7 @@ def extract_state_dict(ckpt):
 
 def load_models(model_path, device, use_fp16=True):
     """Load all required models and return them"""
-    click.echo("Loading models...")
+    click.echo('\nLoading models...')
     
     model_path = Path(model_path)
     ckpt = torch.load(model_path, map_location='cpu', weights_only=False)
@@ -116,7 +119,7 @@ def load_models(model_path, device, use_fp16=True):
 
 def load_audio(file_path, target_sr):
     """Load and preprocess audio file"""
-    click.echo("Loading audio...")
+    click.echo('\nLoading audio...')
     audio, sr = torchaudio.load(file_path)
     if sr != target_sr:
         audio = torchaudio.functional.resample(audio, sr, target_sr)
@@ -267,6 +270,7 @@ def generate_audio(vocoder, mel_out, f0, original_loudness=None, restore_loudnes
     return audio_out
 
 
+@torch.no_grad()
 def process_segment(
     audio_segment, 
     svc_model, vocoder, rmvpe, hubert, rms_extractor, 
@@ -323,6 +327,7 @@ def process_segment(
     return audio_out
 
 
+@torch.no_grad()
 def batch_process_segments(
     segments_with_pos, 
     svc_model, vocoder, rmvpe, hubert, rms_extractor, 
@@ -510,8 +515,8 @@ def pad_tensor_to_length(tensor, length):
 
 @click.command()
 @click.option('-m', '--model', type=click.Path(exists=True), required=True, help='Path to model checkpoint')
-@click.option('-i', '--in_file', type=click.Path(exists=True), required=True, help='Input audio file')
-@click.option('-o', '--out_file', type=click.Path(), required=False, help='Output audio file')
+@click.option('-i', '--in_files', type=click.Path(exists=True), multiple=True, help='Input audio file')
+@click.option('-o', '--out_files', type=click.Path(), multiple=True, required=False, help='Output audio file')
 @click.option('-s', '--speaker', type=str, required=True, help='Target speaker')
 @click.option('-k', '--key-shift', type=int, default=0, help='Pitch shift in semitones')
 @click.option('--device', type=str, default=None, help='Device to use (cuda/cpu)')
@@ -535,8 +540,8 @@ def pad_tensor_to_length(tensor, length):
 @click.option('-bs', '--batch-size', type=int, default=1, help='Batch size for parallel inference')
 def main(
     model,
-    in_file,
-    out_file,
+    in_files,
+    out_files,
     speaker,
     key_shift,
     device,
@@ -560,23 +565,21 @@ def main(
     batch_size
 ):
     """Convert the voice in an audio file to a target speaker."""
+    len_i, len_o = len(in_files), len(out_files)
+    assert len_i > 0 and (len_o == 0 or len_i == len_o)
 
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
-
     svc_model, vocoder, rmvpe, hubert, rms_extractor, spk2idx, dataset_cfg = load_models(model, device, use_fp16)
 
     try:
         speaker_id = spk2idx[speaker]
     except KeyError:
-        raise ValueError(f"Speaker {speaker} not found in the model's speaker list, valid speakers are {spk2idx.keys()}")
+        raise ValueError(f'Speaker {speaker} not found in the model\'s speaker list, valid speakers are {spk2idx.keys()}')
     
     hop_length = 512
     sample_rate = 44100
-
-    in_file = Path(in_file)
-    audio = load_audio(in_file, sample_rate)
 
     slicer = Slicer(
         sr=sample_rate,
@@ -587,17 +590,17 @@ def main(
         max_sil_kept=slicer_max_sil_kept
     )
 
-    click.echo("Slicing audio...")
-    segments_with_pos = slicer.slice(audio)
+    for i in trange(len_i):
+        in_file = Path(in_files[i])
+        audio = load_audio(in_file, sample_rate)
 
-    if restore_loudness:
-        click.echo(f"Will restore loudness to original")
-
-    fade_samples = int(fade_duration * sample_rate / 1000)
-
-    click.echo(f"Processing {len(segments_with_pos)} segments with batch size {batch_size}...")
-    
-    with torch.no_grad():
+        if restore_loudness:
+            click.echo(f'Will restore loudness to original')
+        click.echo(f'Slicing audio {in_file}...')
+        segments_with_pos = slicer.slice(audio)
+        click.echo(f'Processing {len(segments_with_pos)} segments with batch size {batch_size}...')
+        fade_samples = int(fade_duration * sample_rate / 1000)
+        
         processed_segments = batch_process_segments(
             segments_with_pos, svc_model, vocoder, rmvpe, hubert, rms_extractor,
             speaker_id, sample_rate, hop_length, device,
@@ -607,35 +610,33 @@ def main(
             robust_f0, use_fp16, batch_size
         )
 
-    result_audio = np.zeros(len(audio) + fade_samples)
-    
-    for idx, (start_sample, audio_out, expected_length) in enumerate(processed_segments):
-        if len(audio_out) > expected_length:
-            audio_out = audio_out[:expected_length]
-        elif len(audio_out) < expected_length:
-            audio_out = np.pad(audio_out, (0, expected_length - len(audio_out)), 'constant')
-        
-        if idx > 0:
-            audio_out = apply_fade(audio_out.copy(), fade_samples, fade_in=True)
-            result_audio[start_sample:start_sample + fade_samples] *= \
-                np.linspace(1, 0, fade_samples)
-        
-        if idx < len(processed_segments) - 1:
-            audio_out[-fade_samples:] *= np.linspace(1, 0, fade_samples)
-        
-        result_audio[start_sample:start_sample + len(audio_out)] += audio_out
+        result_audio = np.zeros(len(audio) + fade_samples)
+        for idx, (start_sample, audio_out, expected_length) in enumerate(processed_segments):
+            if len(audio_out) > expected_length:
+                audio_out = audio_out[:expected_length]
+            elif len(audio_out) < expected_length:
+                audio_out = np.pad(audio_out, (0, expected_length - len(audio_out)), 'constant')
+            
+            if idx > 0:
+                audio_out = apply_fade(audio_out.copy(), fade_samples, fade_in=True)
+                result_audio[start_sample:start_sample + fade_samples] *= \
+                    np.linspace(1, 0, fade_samples)
+            
+            if idx < len(processed_segments) - 1:
+                audio_out[-fade_samples:] *= np.linspace(1, 0, fade_samples)
+            
+            result_audio[start_sample:start_sample + len(audio_out)] += audio_out
+        result_audio = result_audio[:len(audio)]
 
-    result_audio = result_audio[:len(audio)]
-
-    click.echo("Saving output...")
-    if out_file is not None:
-        out_file = Path(out_file)
-        out_file.parent.mkdir(parents=True, exist_ok=True)
-    else:
-        meta = gen_metadata(DotDict(m=model, s=speaker, k=key_shift, st=slicer_threshold, step=infer_steps))
-        out_file = in_file.parent / f'{in_file.stem}_{meta}.flac'
-    torchaudio.save(out_file, torch.from_numpy(result_audio).unsqueeze(0), sample_rate)
-    click.echo("Done!")
+        if len_o > 0:
+            out_file = Path(out_files[i])
+            out_file.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            meta = gen_metadata(DotDict(m=model, s=speaker, k=key_shift, st=slicer_threshold, step=infer_steps))
+            out_file = in_file.parent / f'{in_file.stem}_{meta}.flac'
+        click.echo(f'Saving output to {out_file}...')
+        torchaudio.save(out_file, torch.from_numpy(result_audio).unsqueeze(0), sample_rate)
+    click.echo('All inputs done!')
 
 
 if __name__ == '__main__':
