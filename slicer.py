@@ -49,6 +49,7 @@ class Slicer:
             return [(0, waveform)]
             
         rms_list = librosa.feature.rms(y=samples, frame_length=self.win_size, hop_length=self.hop_size).squeeze(0)
+        # 静音段标记
         sil_tags = []
         silence_start = None
         clip_start = 0
@@ -138,7 +139,7 @@ class Slicer:
         for i, (start_pos, chunk) in enumerate(non_silence_chunks):
             # Calculate start and end times in seconds
             start_time_sec = start_pos / self.sr
-            end_time_sec = start_pos / self.sr + len(chunk) / self.sr if len(chunk.shape) == 1 else start_pos / self.sr + chunk.shape[1] / self.sr
+            end_time_sec = (start_pos + len(chunk) if len(chunk.shape) == 1 else chunk.shape[1]) / self.sr
             duration_sec = end_time_sec - start_time_sec
             
             # Format start and end times as mm:ss

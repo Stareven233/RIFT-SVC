@@ -9,20 +9,23 @@ $name = "megumin"
 $model = "ckpts/fritia/final-step=1520.ckpt"
 $model = "ckpts/$name/extracted.ckpt"
 $key=0
-$dir = "D:\Document\ai-sings"
-$path = "$dir\God Knows\4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
-$path = "$dir\黄昏\黄昏_人声2.flac"
-$path = "$dir\銀の龍の背に乗って\骑在银龙的背上_vnV.flac"
-$path = "$dir\TAIDADA\TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
-$path = "$dir\虫儿飞\童声歌唱家冯晓菲奶声虫儿飞带你净化心灵_Vocals_vocals_noreverb.flac"
-$path = "$dir\最后一页\顾疚疚最后一页_Vocals_vocals.flac"
-$path = "$dir\Ending Note\Ending Note 門谷純_Vocals_vocals_noreverb.flac"
-$path2 = "$dir\Ending Note\Ending Note 門谷純_Vocals_vocals.flac"
+$indir = "D:\Document\ai-sings"
+$path = "$indir\God Knows\4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
+$path = "$indir\黄昏\黄昏_人声2.flac"
+$path = "$indir\銀の龍の背に乗って\骑在银龙的背上_vnV.flac"
+$path = "$indir\TAIDADA\TAIDADA_反相不纯人声_Vocals_vocals_noreverb.flac"
+$path = "$indir\虫儿飞\童声歌唱家冯晓菲奶声虫儿飞带你净化心灵_Vocals_vocals_noreverb.flac"
+$path = "$indir\最后一页\顾疚疚最后一页_Vocals_vocals.flac"
+$path = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals_noreverb.flac"
+$path2 = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals.flac"
+$path = "$indir\君は薔薇より美しい\雨宫天君は薔薇より美しい_Vocals_vocals_noreverb.flac"
+$path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb_megumin_sov@5k_0vk.flac"
 
-& uv run infer.py -m $model -i $path -i $path2  -s $name -bs 8 -k $key --infer-steps 32
-& uv run infer.py -m $model -i $path -s megumin -bs 8 -k $key --infer-steps 32
+& uv run infer.py -m $model -i $path -s $name -bs 4 -k $key
+& uv run infer.py -m $model -i $path -s $name -bs 8 -k $key --infer-steps 32 --slicer-threshold -30 --robust-f0 1
+& uv run infer.py -m $model -i $path -s $name -bs 1 -k $key --infer-steps 32 --slicer-threshold -60 --slicer-min-length 5000 --slicer-min-interval 300
+& uv run infer.py -m $model -i $path -i $path2 -s $name -bs 1 -k $key --infer-steps 32
 & uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.0 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
-& uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.2 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 
 uv run scripts/extract_model_ckpt.py $model
 $src = "C:\!ext\CODE\Project\ComfyUI-aki-v1.7\ComfyUI\models\SEEDVR2\ema_vae_fp16.safetensors"
@@ -515,12 +518,12 @@ def pad_tensor_to_length(tensor, length):
 
 @click.command()
 @click.option('-m', '--model', type=click.Path(exists=True), required=True, help='Path to model checkpoint')
-@click.option('-i', '--in_files', type=click.Path(exists=True), multiple=True, help='Input audio file')
-@click.option('-o', '--out_files', type=click.Path(), multiple=True, required=False, help='Output audio file')
+@click.option('-i', '--in_files', type=click.Path(exists=True), multiple=True, help='Input audio files')
+@click.option('-o', '--out_files', type=click.Path(), multiple=True, required=False, help='Output audio files')
 @click.option('-s', '--speaker', type=str, required=True, help='Target speaker')
 @click.option('-k', '--key-shift', type=int, default=0, help='Pitch shift in semitones')
 @click.option('--device', type=str, default=None, help='Device to use (cuda/cpu)')
-@click.option('--infer-steps', type=int, default=DefaultParams.INFER_STEPS, help='Number of inference steps')
+@click.option('--infer-steps', type=int, default=DefaultParams.INFER_STEPS.value, help='Number of inference steps')
 @click.option('--ds-cfg-strength', type=float, default=0.2, help='Downsampled content vector guidance strength')
 @click.option('--spk-cfg-strength', type=float, default=0.8, help='Speaker guidance strength')
 @click.option('--skip-cfg-strength', type=float, default=0.0, help='Skip layer guidance strength')

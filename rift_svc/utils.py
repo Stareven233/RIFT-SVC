@@ -157,6 +157,7 @@ def post_process_f0(f0, sample_rate, hop_length, n_frames, silence_front=0.0, cu
     target_time = hop_length / sample_rate * np.arange(n_frames - start_frame)
     f0 = np.interp(target_time, origin_time, f0)
     uv = np.interp(target_time, origin_time, uv.astype(float)) > 0.5
+    # 插值仅用于对齐，最终无声段必须为 0
     f0[uv] = 0
 
     # Pad the silence_front if needed
@@ -220,6 +221,7 @@ def slide_nanmedian(signals=np.array([]), win_length=3):
 
 
 def f0_ensemble(rmvpe_f0, pw_f0, pmac_f0):
+    '''f0_ensemble 是一个精心设计的多源 F0 融合策略，通过中位数投票 + 趋势平滑 + 异常修正 + 缺失处理，显著提升 F0 轨迹的准确性和鲁棒性，特别适用于对 F0 质量敏感的歌声转换（SVC）系统。'''
     trunc_len = len(rmvpe_f0)
     pw_f0 = pw_f0[:trunc_len]
     # pad pmac_f0

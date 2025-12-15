@@ -10,6 +10,7 @@ dataset:
   meta_info_path: data/${name}/meta_info.json
   n_samples: ~
   max_frame_len: 256
+  lazy: False
 
 vocoder:
   type: nsf-hifigan
@@ -22,11 +23,11 @@ training:
   max_steps: 5200
   decay_step: 1500
   # decay_step: [1500, 4500, 5500]
-  decay_rate: 0.6
+  decay_rate: 0.5
   warmup_ratio: 0.05
   anneal_ratio: 0.2
   test_per_steps: 1000
-  save_per_steps: 5000
+  save_per_steps: 2000
   # save_per_steps: ${training.test_per_steps}
   weight_decay: 0.01
   num_workers: 4
