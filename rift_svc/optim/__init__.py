@@ -5,8 +5,8 @@ from schedulefree import AdamWScheduleFree
 from torch.optim import AdamW
 from omegaconf import DictConfig
 
-from .muon_moonshot import get_params_for_muon, Muon
-from .adamuon import AdaMuonWrapper
+from .muon import get_params_for_muon, Muon
+from .adamuon import get_params_for_adamuon, AdaMuon
 from . import lr_scheduler
 
 
@@ -77,16 +77,10 @@ def get_optimizer(model, optimizer_type, optimizer_params: DictConfig, global_st
             optimizer = AdamW(optim_groups, betas=betas, weight_decay=weight_decay)
             min_lr = optimizer_params.min_lr or 0.0
             scheduler = lr_scheduler.LinearWarmupDecayLR(optimizer, warmup_steps, max_steps, min_lr=min_lr)
-        case 'muon':
-            pm, po = get_params_for_muon(model)
+        case 'muon' | 'adamuon':
+            pm, po = (get_params_for_muon if optimizer_type == 'muon' else get_params_for_adamuon)(model)
             # 笨办法兼容optim_groups
-            optimizer = Muon(lr, weight_decay, pm, adamw_params=po, optim_groups=optim_groups)
-            scheduler = lr_scheduler.warmup_decay_anneal(optimizer, max_steps, warmup_ratio, decay_step, decay_rate, anneal_ratio, global_step=global_step)
-        case 'adamuon' if not lora_training:
-            optimizer = AdaMuonWrapper(model, lr, betas, weight_decay, rank=0, world_size=1)
-            if global_step != -1:
-                for g in optimizer.param_groups:
-                    g['initial_lr'] = g['lr']
+            optimizer = (Muon if optimizer_type == 'muon' else AdaMuon)(lr, weight_decay, pm, adamw_params=po, optim_groups=optim_groups)
             scheduler = lr_scheduler.warmup_decay_anneal(optimizer, max_steps, warmup_ratio, decay_step, decay_rate, anneal_ratio, global_step=global_step)
         case _:
             raise ValueError(f'Invalid optimizer type: {optimizer_type} with {lora_training=}')

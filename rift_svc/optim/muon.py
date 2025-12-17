@@ -22,7 +22,7 @@ def get_params_for_muon(model: nn.Module):
     for param in module.parameters(recurse=False):
       if not param.requires_grad:
         continue
-      if not isinstance(module, nn.Embedding) and param.ndim == 2:
+      if not isinstance(module, nn.Embedding) and param.ndim < 2:
         muon_params.add(param)
       else:
         other_params.add(param)
@@ -119,7 +119,6 @@ class Muon(torch.optim.Optimizer):
         adamw_eps=adamw_eps,
     )
 
-    adamw_params = list(adamw_params)
     if optim_groups is None:
       params = list(muon_params)
       params.extend(adamw_params)

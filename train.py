@@ -23,7 +23,7 @@ uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
 cd D:\Code\projects\RIFT-SVC
 $overrides = @("training.run_name=test","dataset.n_samples=20","training.max_steps=23","training.batch_size_per_gpu=2")
 $name = "fritia"
-$overrides = @("training.run_name=${name}","training.max_steps=2410","training.decay_step=600","training.test_per_steps=800")
+$overrides = @("training.run_name=${name}","training.max_steps=2410","training.decay_step=600","training.test_per_steps=800", "dataset.lazy=True")
 $name = "aino"
 $overrides = @("training.run_name=${name}","training.max_steps=3600","training.decay_step=[500, 1200, 2200]","training.test_per_steps=500")
 $name = "megumin"
@@ -124,6 +124,8 @@ def main(cfg: DictConfig):
         global_step=global_step,
         lora_training=cfg.training.get('lora_training', False),
     )
+    if hasattr(optimizer, 'train'):
+        optimizer.train()
     OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
     model = RIFTSVCLightningModule(
         model=rf,
@@ -196,9 +198,6 @@ def main(cfg: DictConfig):
         log_every_n_steps=cfg.training.log_every_n_steps,
         # profiler=SimpleProfiler(dirpath='logs', filename='simple_profile'),
     )
-
-    if hasattr(optimizer, 'train'):
-        optimizer.train()
 
     # train_sampler = WeightedSampler(train_dataset.cache['weight'], replacement=True)
     train_sampler = WeightedRandomSampler(train_dataset.cache['weight'], len(train_dataset), replacement=True)
