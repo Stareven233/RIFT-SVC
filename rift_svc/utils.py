@@ -412,14 +412,16 @@ ckpt_step_patten = re.compile(r'(?<=-step\=)\d+')  # model-step=180000.ckpt
 _original_save_hp = LightningModule.save_hyperparameters
 
 
-def get_newest_checkpoint(ckpt_dir: Path, glob_pattern='*.ckpt') -> str|None:
+def get_newest_checkpoint(ckpt_dir: Path, glob_pattern='*.ckpt', extracted_first=False) -> str|None:
     '''
     寻找并返回权重目录中step最大的权重以继续训练
-
+    
     :param ckpt_dir: 权重保存目录，一般为 exp/name
     :type ckpt_dir: Path
+    :param glob_pattern: 用于Path.glob初筛用的匹配规则
+    :param extracted_first: 是否优先选取精简过的不含优化器状态的权重
     :return: 找到的权重路径
-    :rtype: str|None
+    :rtype: str | None
     '''
     ckpts = []
     for p in ckpt_dir.rglob(glob_pattern):
@@ -429,7 +431,8 @@ def get_newest_checkpoint(ckpt_dir: Path, glob_pattern='*.ckpt') -> str|None:
     if len(ckpts) <= 0:
         return None
     # 按step从小到大排序，若权重是被去除了优化器等状态的优先级就降低
-    ckpts.sort(key=lambda x: x[1] - 0.5 * (x[0].stem.startswith('extracted')))
+    weight = lambda p: (1 if extracted_first else -1) * p.stem.startswith('extracted')
+    ckpts.sort(key=lambda x: x[1] + weight(x[0]))
     p, _ = ckpts[-1]
     return p.as_posix()
 

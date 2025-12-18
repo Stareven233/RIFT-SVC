@@ -5,11 +5,8 @@ cd D:\Code\projects\RIFT-SVC
 nvidia-smi
 
 $name = "aino"
-$name = "megumin"
 $name = "「少女」"
-$model = "ckpts/fritia/final-step=1520.ckpt"
-$model = "ckpts/$name/extracted.ckpt"
-$model = "ckpts/「少女」/model-step=4000.ckpt"
+$name = "megumin"
 $key=0
 $indir = "D:\Document\ai-sings"
 $path = "$indir\God Knows\4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
@@ -23,7 +20,7 @@ $path2 = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals.flac"
 $path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb_「少女」_sov@5k_0vk_16.8k.flac"
 $path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb.flac"
 
-& uv run infer.py -m $model -i $path -s $name -bs 4 -k $key
+& uv run infer.py -n $name -i $path -bs 4 -k $key
 & uv run infer.py -m $model -i $path -s $name -bs 8 -k $key --infer-steps 32 --slicer-threshold -30 --robust-f0 1
 & uv run infer.py -m $model -i $path -s $name -bs 1 -k $key --infer-steps 32 --slicer-threshold -60 --slicer-min-length 5000 --slicer-min-interval 300
 & uv run infer.py -m $model -i $path -i $path2 -s $name -bs 1 -k $key --infer-steps 32
@@ -53,6 +50,7 @@ from rift_svc.nsf_hifigan.vocoder import DotDict
 from rift_svc.rmvpe import RMVPE
 from rift_svc.utils import linear_interpolate_tensor, post_process_f0, f0_ensemble, f0_ensemble_light, get_f0_pw, get_f0_pm
 from rift_svc.utils import ckpt_step_patten
+from rift_svc.utils import get_newest_checkpoint
 from slicer import Slicer
 
 
@@ -519,7 +517,8 @@ def pad_tensor_to_length(tensor, length):
 
 
 @click.command()
-@click.option('-m', '--model', type=click.Path(exists=True), required=True, help='Path to model checkpoint')
+@click.option('-n', '--name', type=str, required=True, help='Exp name for dir exp/name')
+@click.option('-m', '--model', type=click.Path(exists=True), default=None, help='Path to model checkpoint')
 @click.option('-i', '--in_files', type=click.Path(exists=True), multiple=True, help='Input audio files')
 @click.option('-o', '--out_files', type=click.Path(), multiple=True, required=False, help='Output audio files')
 @click.option('-s', '--speaker', type=str, required=False, default=None, help='Target speaker, None for first speaker (order depends on json loading)')
@@ -544,6 +543,7 @@ def pad_tensor_to_length(tensor, length):
 @click.option('--use-fp16', is_flag=True, default=True, help='Use float16 precision for faster inference')
 @click.option('-bs', '--batch-size', type=int, default=1, help='Batch size for parallel inference')
 def main(
+    name,
     model,
     in_files,
     out_files,
@@ -576,6 +576,11 @@ def main(
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
+    exp_dir = Path(f'exp/{name}')
+    if model is None:
+        model = get_newest_checkpoint(exp_dir, extracted_first=True)
+    assert model is not None, f'Error: 输入模型权重路径为空，且在{exp_dir}下找不到权重！'
+    print(f'Loading {model=}')
     svc_model, vocoder, rmvpe, hubert, rms_extractor, spk2idx, dataset_cfg = load_models(model, device, use_fp16)
 
     speaker = speaker or next(iter(spk2idx.keys()))
@@ -583,6 +588,7 @@ def main(
         speaker_id = spk2idx[speaker]
     except KeyError:
         raise ValueError(f'Speaker {speaker} not found in dict spk2idx')
+    print(f'Choosing {speaker=}')
     
     hop_length = 512
     sample_rate = 44100
