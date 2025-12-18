@@ -9,7 +9,7 @@ import pyloudnorm as pyln
 from tqdm import tqdm
 
 
-def process_audio_file(file_path, target_sample_rate, target_loudness, headroom=0.99):
+def process_audio_file(file_path: Path, target_sample_rate, target_loudness, headroom=0.99, target_dir=None):
     """
     Resamples and normalizes the loudness of an audio file.
 
@@ -55,6 +55,8 @@ def process_audio_file(file_path, target_sample_rate, target_loudness, headroom=
             clipped = True
 
         # Write the resampled and loudness-normalized audio back to the same path
+        if target_dir is not None:
+            file_path = target_dir / file_path.name
         sf.write(file_path, loudness_normalized_audio, samplerate)
 
         if clipped:
@@ -69,7 +71,7 @@ def process_audio_file(file_path, target_sample_rate, target_loudness, headroom=
         return f"Error processing {file_path}: {e}"
 
 
-def find_sf_audio_paths(source_root):
+def find_sf_audio_paths(source_path: Path):
     """
     Gathers all soundfile-supported audio files from the source directory.
 
@@ -79,12 +81,11 @@ def find_sf_audio_paths(source_root):
     Returns:
     - list of Path: List of audio file paths.
     """
-    source_path = Path(source_root)
     audio_files = [f for f in source_path.rglob('*') if f.suffix[1:].upper() in sf.available_formats()]
     return audio_files
 
 
-def resample_normalize_audios(source_root, target_sample_rate=44100, target_loudness=-18.0, headroom=0.99, max_workers=None):
+def resample_normalize_audios(source_root, target_root=None, target_sample_rate=44100, target_loudness=-18.0, headroom=0.99, max_workers=None):
     """
     Resamples and normalizes loudness for all soundfile-supported audio files in the source directory.
 
@@ -95,8 +96,6 @@ def resample_normalize_audios(source_root, target_sample_rate=44100, target_loud
     - headroom (float): Maximum absolute amplitude after scaling to prevent clipping (default: 0.99).
     - max_workers (int): Maximum number of worker processes. Defaults to number of CPUs.
     """
-    source_root = Path(source_root)
-
     # Gather all relevant audio files
     audio_files = find_sf_audio_paths(source_root)
     total_files = len(audio_files)
@@ -108,10 +107,13 @@ def resample_normalize_audios(source_root, target_sample_rate=44100, target_loud
     print(f"Found {total_files} audio files to resample and normalize.")
 
     # Define a partial function with fixed arguments
-    worker = partial(process_audio_file, 
-                     target_sample_rate=target_sample_rate, 
-                     target_loudness=target_loudness, 
-                     headroom=headroom)
+    worker = partial(
+        process_audio_file, 
+        target_sample_rate=target_sample_rate, 
+        target_loudness=target_loudness, 
+        headroom=headroom,
+        target_dir=target_root,
+    )
 
     # Use ProcessPoolExecutor for CPU-bound tasks
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
@@ -136,16 +138,12 @@ def parse_arguments():
     """
     parser = argparse.ArgumentParser(description="Resample and normalize audio files in a directory.")
     
-    parser.add_argument('--src', type=str, required=True,
-                        help='Path to the organized root directory containing audio files.')
-    parser.add_argument('--target_sample_rate', type=int, default=44100,
-                        help='Desired sample rate in Hz (default: 44100).')
-    parser.add_argument('--target_loudness', type=float, default=-18.0,
-                        help='Desired loudness in LUFS (default: -18.0).')
-    parser.add_argument('--headroom', type=float, default=0.99,
-                        help='Maximum absolute amplitude after scaling to prevent clipping (default: 0.99).')
-    parser.add_argument('--max_workers', type=int, default=None,
-                        help='Maximum number of worker processes (default: number of CPUs).')
+    parser.add_argument('--src', type=Path, required=True, help='Path to the organized root directory containing audio files.')
+    parser.add_argument('--dest', type=Path, required=False, default=None, help='Path to the target directory containing output audio files.')
+    parser.add_argument('--target_sample_rate', type=int, default=44100, help='Desired sample rate in Hz (default: 44100).')
+    parser.add_argument('--target_loudness', type=float, default=-18.0, help='Desired loudness in LUFS (default: -18.0).')
+    parser.add_argument('--headroom', type=float, default=0.99, help='Maximum absolute amplitude after scaling to prevent clipping (default: 0.99).')
+    parser.add_argument('--max_workers', type=int, default=None, help='Maximum number of worker processes (default: number of CPUs).')
     
     return parser.parse_args()
 
@@ -155,7 +153,8 @@ if __name__ == "__main__":
 
     # Resample and normalize the audio files based on provided arguments
     resample_normalize_audios(
-        source_root=args.src, 
+        source_root=args.src,
+        target_root=args.dest,
         target_sample_rate=args.target_sample_rate, 
         target_loudness=args.target_loudness, 
         headroom=args.headroom, 
