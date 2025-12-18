@@ -14,7 +14,6 @@ $name='aino'
 $name='「少女」'
 
 1. 根据选择的数据文件里说话人子目录来决定有哪些说话人参与训练
-TODO 像sov那样改成支持source_dir+speakers输入，但输出整理到同一个目录
 uv run scripts/resample_normalize_audios.py --src D:/Code/projects/so-vits-svc/data/「少女」 --dest data/$name
 uv run scripts/prepare_data_meta.py --data-dir data/$name --num-test 15
 uv run scripts/prepare_mel.py --data-dir data/$name --num-workers 0
@@ -142,6 +141,7 @@ def main(cfg: DictConfig):
         time_schedule=cfg.training.time_schedule,
     )
     OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
+    # Actually, there's no need to store this, as a copy exists in ckpt['hyper_parameters']['cfg']
     OmegaConf.save(cfg, exp_dir / 'config.yaml', resolve=True)
 
     if cfg.training.get('lora_training', False):
