@@ -6,8 +6,10 @@ nvidia-smi
 
 $name = "aino"
 $name = "megumin"
+$name = "「少女」"
 $model = "ckpts/fritia/final-step=1520.ckpt"
 $model = "ckpts/$name/extracted.ckpt"
+$model = "ckpts/「少女」/model-step=4000.ckpt"
 $key=0
 $indir = "D:\Document\ai-sings"
 $path = "$indir\God Knows\4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
@@ -18,8 +20,8 @@ $path = "$indir\虫儿飞\童声歌唱家冯晓菲奶声虫儿飞带你净化心
 $path = "$indir\最后一页\顾疚疚最后一页_Vocals_vocals.flac"
 $path = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals_noreverb.flac"
 $path2 = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals.flac"
-$path = "$indir\君は薔薇より美しい\雨宫天君は薔薇より美しい_Vocals_vocals_noreverb.flac"
-$path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb_megumin_sov@5k_0vk.flac"
+$path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb_「少女」_sov@5k_0vk_16.8k.flac"
+$path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb.flac"
 
 & uv run infer.py -m $model -i $path -s $name -bs 4 -k $key
 & uv run infer.py -m $model -i $path -s $name -bs 8 -k $key --infer-steps 32 --slicer-threshold -30 --robust-f0 1
@@ -520,7 +522,7 @@ def pad_tensor_to_length(tensor, length):
 @click.option('-m', '--model', type=click.Path(exists=True), required=True, help='Path to model checkpoint')
 @click.option('-i', '--in_files', type=click.Path(exists=True), multiple=True, help='Input audio files')
 @click.option('-o', '--out_files', type=click.Path(), multiple=True, required=False, help='Output audio files')
-@click.option('-s', '--speaker', type=str, required=True, help='Target speaker')
+@click.option('-s', '--speaker', type=str, required=False, default=None, help='Target speaker, None for first speaker (order depends on json loading)')
 @click.option('-k', '--key-shift', type=int, default=0, help='Pitch shift in semitones')
 @click.option('--device', type=str, default=None, help='Device to use (cuda/cpu)')
 @click.option('--infer-steps', type=int, default=DefaultParams.INFER_STEPS.value, help='Number of inference steps')
@@ -576,10 +578,11 @@ def main(
     device = torch.device(device)
     svc_model, vocoder, rmvpe, hubert, rms_extractor, spk2idx, dataset_cfg = load_models(model, device, use_fp16)
 
+    speaker = speaker or next(iter(spk2idx.keys()))
     try:
         speaker_id = spk2idx[speaker]
     except KeyError:
-        raise ValueError(f'Speaker {speaker} not found in the model\'s speaker list, valid speakers are {spk2idx.keys()}')
+        raise ValueError(f'Speaker {speaker} not found in dict spk2idx')
     
     hop_length = 512
     sample_rate = 44100
