@@ -7,41 +7,44 @@ uv add numpy==2.2.6
 New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\rmvpe\model.pt" -Target "D:\Code\projects\DDSP-SVC\pretrain\rmvpe\model.pt"
 New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\vocoder" -Target "D:\Code\projects\DDSP-SVC\pretrain\vocoder"
 
-!这个项目不需要提前切片，会在训练时随机借助python序列的slice功能切
-
 cd D:\Code\projects\RIFT-SVC
-$DATA_DIR="data/megumin"
-$DATA_DIR="data/fritia"
-$DATA_DIR="data/aino"
-uv run scripts/resample_normalize_audios.py --src /temp
-uv run scripts/prepare_data_meta.py --data-dir $DATA_DIR --num-test 20
-uv run scripts/prepare_mel.py --data-dir $DATA_DIR --num-workers 0
-uv run scripts/prepare_rms.py --data-dir $DATA_DIR --num-workers 0
-uv run scripts/prepare_f0.py --data-dir $DATA_DIR --num-workers 0
-uv run scripts/prepare_cvec.py --data-dir $DATA_DIR --num-workers 0
+$name='megumin'
+$name='fritia'
+$name='aino'
+$name='「少女」'
+
+1. 根据选择的数据文件里说话人子目录来决定有哪些说话人参与训练
+TODO 像sov那样改成支持source_dir+speakers输入，但输出整理到同一个目录
+uv run scripts/resample_normalize_audios.py --src D:/Code/projects/so-vits-svc/data/「少女」 --dest data/$name
+uv run scripts/prepare_data_meta.py --data-dir data/$name --num-test 15
+uv run scripts/prepare_mel.py --data-dir data/$name --num-workers 0
+uv run scripts/prepare_rms.py --data-dir data/$name --num-workers 0
+uv run scripts/prepare_f0.py --data-dir data/$name --num-workers 0
+uv run scripts/prepare_cvec.py --data-dir data/$name --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
 $overrides = @("training.run_name=test","dataset.n_samples=20","training.max_steps=23","training.batch_size_per_gpu=2")
 $name = "fritia"
-$overrides = @("training.run_name=${name}","training.max_steps=2410","training.decay_step=600","training.test_per_steps=800", "dataset.lazy=True")
+$overrides = @("training.run_name='$name'","training.max_steps=2410","training.decay_step=600","training.test_per_steps=800", "dataset.lazy=True")
 $name = "aino"
-$overrides = @("training.run_name=${name}","training.max_steps=3600","training.decay_step=[500, 1200, 2200]","training.test_per_steps=500")
+$overrides = @("training.run_name='$name'","training.max_steps=3600","training.decay_step=[500, 1200, 2200]","training.test_per_steps=500")
+$name = "「少女」"
+$overrides = @("training.run_name='$name'","training.max_steps=4010","training.decay_step=[600, 1200, 2300]","training.test_per_steps=500")
 $name = "megumin"
-$overrides = @("training.run_name=${name}-r5","training.max_steps=15100","training.decay_step=[2100, 6500, 12000, ]","training.test_per_steps=1000")
+$overrides = @("training.run_name='$name'-r5","training.max_steps=12100","training.decay_step=[2100, 6500, 12000, ]","training.test_per_steps=1000")
 
-uv run train.py name=$name @overrides
-uv run train.py name=$name @overrides training.resume_from_checkpoint=ckpts/${name}-r5/model-step\=6000.ckpt
-uv run train.py name=$name @overrides training.pretrained_path=ckpts/${name}-r3/model-step\=1059.ckpt
-uv run train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
+uv run train.py name="'$name'" @overrides
+uv run train.py name="'$name'" @overrides training.resume_from_checkpoint="'ckpts/$name/model-step=485.ckpt'"
+uv run train.py name="'$name'" @overrides training.pretrained_path="'ckpts/${name}-r3/model-step=1059.ckpt'"
+uv run train.py name="'$name'" training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
 Write-Host "等待10分钟..."
 Start-Sleep -Seconds 600
-tensorboard --logdir D:/Code/projects/RIFT-SVC/logs
+tensorboard --logdir D:/Code/projects/RIFT-SVC/exp
 cd D:\Code\projects\RIFT-SVC
 
 #todo
 增加epoch设置，对不同大小的数据集比较友好
-Muon改为真正继承Optimizer
 改造配置读取方式，模糊掉 name 的输入
 dataset转为iter类型，或者多倍，减少epoch交替时速度降低
 音区偏移
@@ -67,6 +70,7 @@ from rift_svc.utils import load_state_dict
 from rift_svc.utils import CustomProgressBar, ModelCheckpoint2, EnsureFinalValidationCallback
 from rift_svc.utils import ckpt_step_patten
 from rift_svc.utils import safe_save_hyperparameters
+from rift_svc.utils import get_newest_checkpoint
 
 LightningModule.save_hyperparameters = safe_save_hyperparameters
 torch.set_float32_matmul_precision('high')
@@ -79,76 +83,9 @@ torch.set_float32_matmul_precision('high')
 @hydra.main(version_base=None, config_path='config', config_name='noe')
 def main(cfg: DictConfig):
     seed_everything(cfg.seed)
-
-    train_dataset = SVCDataset(**cfg.dataset, split='train')
-    val_dataset = SVCDataset(**cfg.dataset, split='test')
-    transformer = DiT(
-        **cfg.model,
-        num_speaker=train_dataset.num_speakers,
-    )
-    rf = RF(
-        transformer=transformer,
-        time_schedule=cfg.training.time_schedule,
-    )
-
-    # Load pretrained weights if specified
-    resume_ckpt = cfg.training.get('resume_from_checkpoint', None)
-    pre_ckpt = cfg.training.get('pretrained_path', None)
-    if resume_ckpt is None and pre_ckpt is not None:
-        state_dict = torch.load(pre_ckpt, map_location='cuda', weights_only=False)
-        # print(f'{state_dict.keys()=}')  # (['epoch', 'global_step', 'pytorch-lightning_version', 'state_dict', 'loops', 'hparams_name', 'hyper_parameters'])
-        if 'state_dict' in state_dict:
-            state_dict = state_dict['state_dict']
-        # Load only model weights, allowing mismatched keys for speaker embeddings
-        missing_keys, unexpected_keys = load_state_dict(rf, state_dict)
-        print(f"Loaded pretrained model from {pre_ckpt}")
-        if missing_keys:
-            print(f"Missing keys: {missing_keys}")
-        if unexpected_keys:
-            print(f"Unexpected keys: {unexpected_keys}")
-    
-    if cfg.training.get('lora_training', False):
-        rf.transformer.apply_lora(cfg.training.lora_rank, cfg.training.lora_alpha)
-    
-    if cfg.training.get('freeze_adaln_and_tembed', True):
-        rf.transformer.freeze_adaln_and_tembed()
-
-    global_step = -1
-    if resume_ckpt or pre_ckpt:
-        m = ckpt_step_patten.search(resume_ckpt or pre_ckpt)
-        global_step = (m and int(m.group(0))) or -1
-    optimizer, lr_scheduler = get_optimizer(
-        rf,
-        cfg.training.optimizer_type,
-        cfg.training,
-        global_step=global_step,
-        lora_training=cfg.training.get('lora_training', False),
-    )
-    if hasattr(optimizer, 'train'):
-        optimizer.train()
-    OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
-    model = RIFTSVCLightningModule(
-        model=rf,
-        optimizer=optimizer,
-        lr_scheduler=lr_scheduler,
-        cfg=cfg
-    )
-
     run_name = cfg.training.run_name
-    ckpt_dir = Path('ckpts', run_name)
-    ckpt_dir.mkdir(exist_ok=True)
-    OmegaConf.save(cfg, ckpt_dir / 'config.yaml', resolve=True)
-    checkpoint_callback = ModelCheckpoint2(
-        dirpath=ckpt_dir,
-        filename='model-{step}',
-        # monitor='val/si_snr',
-        # mode='max',
-        save_top_k=-1,
-        save_last='link',
-        save_on_exception=cfg.training.get('save_on_interruption', None),
-        every_n_train_steps=cfg.training.save_per_steps,
-        save_weights_only=cfg.training.save_weights_only,
-    )
+    exp_dir = Path('exp', run_name)
+    exp_dir.mkdir(exist_ok=True)
 
     # Logger selection based on config
     logger_type = cfg.training.get('logger', 'wandb').lower()
@@ -169,14 +106,80 @@ def main(cfg: DictConfig):
             logger.experiment.config.update(cfg_dict)
     elif logger_type == 'tensorboard':
         # Use TensorBoard logger
-        tensorboard_log_dir = Path('logs', run_name)
+        tensorboard_log_dir = exp_dir / 'logs'
         logger = TensorBoardLogger(
             save_dir=tensorboard_log_dir,
-            name=None,  # Use the directory as is without adding another subfolder
+            name='',  # Use the directory as is without adding another subfolder
             version='',  # Don't add version subdirectory
         )
     else:
         raise ValueError(f"Invalid logger type: {logger_type}")
+
+    # Load pretrained weights if specified
+    resume_ckpt = cfg.training.get('resume_from_checkpoint', None) or get_newest_checkpoint(exp_dir)
+    pre_ckpt = cfg.training.get('pretrained_path', None)
+    if resume_ckpt is None and pre_ckpt is not None:
+        state_dict = torch.load(pre_ckpt, map_location='cuda', weights_only=False)
+        # print(f'{state_dict.keys()=}')  # (['epoch', 'global_step', 'pytorch-lightning_version', 'state_dict', 'loops', 'hparams_name', 'hyper_parameters'])
+        if 'state_dict' in state_dict:
+            state_dict = state_dict['state_dict']
+        # Load only model weights, allowing mismatched keys for speaker embeddings
+        missing_keys, unexpected_keys = load_state_dict(rf, state_dict)
+        print(f"Loaded pretrained model from {pre_ckpt}")
+        if missing_keys:
+            print(f"Missing keys: {missing_keys}")
+        if unexpected_keys:
+            print(f"Unexpected keys: {unexpected_keys}")
+    
+    train_dataset = SVCDataset(**cfg.dataset, split='train')
+    val_dataset = SVCDataset(**cfg.dataset, split='test')
+    transformer = DiT(
+        **cfg.model,
+        num_speaker=train_dataset.num_speakers,
+    )
+    rf = RF(
+        transformer=transformer,
+        time_schedule=cfg.training.time_schedule,
+    )
+    OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
+    OmegaConf.save(cfg, exp_dir / 'config.yaml', resolve=True)
+
+    if cfg.training.get('lora_training', False):
+        rf.transformer.apply_lora(cfg.training.lora_rank, cfg.training.lora_alpha)
+    if cfg.training.get('freeze_adaln_and_tembed', True):
+        rf.transformer.freeze_adaln_and_tembed()
+
+    global_step = -1
+    if resume_ckpt or pre_ckpt:
+        m = ckpt_step_patten.search(resume_ckpt or pre_ckpt)
+        global_step = (m and int(m.group(0))) or -1
+    optimizer, lr_scheduler = get_optimizer(
+        rf,
+        cfg.training.optimizer_type,
+        cfg.training,
+        global_step=global_step,
+        lora_training=cfg.training.get('lora_training', False),
+    )
+    if hasattr(optimizer, 'train'):
+        optimizer.train()
+
+    model = RIFTSVCLightningModule(
+        model=rf,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        cfg=cfg
+    )
+    checkpoint_callback = ModelCheckpoint2(
+        dirpath=exp_dir,
+        filename='model-{step}',
+        # monitor='val/si_snr',
+        # mode='max',
+        save_top_k=-1,
+        save_last='link',
+        save_on_exception=cfg.training.get('save_on_interruption', None),
+        every_n_train_steps=cfg.training.save_per_steps,
+        save_weights_only=cfg.training.save_weights_only,
+    )
 
     callbacks = [checkpoint_callback, CustomProgressBar(), EnsureFinalValidationCallback()]
     if lr_scheduler is not None:

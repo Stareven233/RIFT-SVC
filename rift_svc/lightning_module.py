@@ -130,7 +130,7 @@ class RIFTSVCLightningModule(LightningModule):
         res = ';\t'.join((f'{k}:{v:.4f}' for k, v in metrics.items()))
         optimizer = self.trainer.optimizers[0]
         current_lr = optimizer.param_groups[0]['lr']
-        print(f'Current Learning Rate: {current_lr}\n{res}', flush=True)
+        print(f'\nCurrent Learning Rate: {current_lr}\n{res}', flush=True)
 
     def validation_step(self, batch, batch_idx, log=True):
         """

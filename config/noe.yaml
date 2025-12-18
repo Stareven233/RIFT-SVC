@@ -3,18 +3,24 @@ name: megumin
 
 defaults:
   - _self_
-  - model: dit-512-8
+  # 将dit-base指定的值放到 model 键下面
+  - model: dit-base
 
 dataset:
   data_dir: data/${name}
   meta_info_path: data/${name}/meta_info.json
   n_samples: ~
   max_frame_len: 256
+  # 是否懒加载数据，False则会在启动训练时将所有数据加载到内存
   lazy: False
 
 vocoder:
   type: nsf-hifigan
   ckpt: pretrained/vocoder/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt
+
+model:
+  dim: 512
+  depth: 8
 
 training:
   run_name: test
@@ -38,6 +44,7 @@ training:
   max_grad_norm: 0
   log_every_n_steps: 10
   log_media_per_steps: ${training.test_per_steps}
+  # 为空时若训练目录有历史权重，则会找最新的一个加载
   resume_from_checkpoint: ~
   pretrained_path: pretrained/pretrain-v3_dit-512-8.ckpt
   save_weights_only: false

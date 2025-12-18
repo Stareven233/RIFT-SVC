@@ -3,7 +3,7 @@ pretrained/*
 data/*
 wandb/*
 outputs/*
-ckpts/*
+exp/*
 mels/*
 lightning_logs/*
 logs/*

@@ -16,7 +16,6 @@ from PIL import Image
 from lightning.pytorch import callbacks
 from lightning.pytorch import LightningModule
 import parselmouth as pm
-import librosa
 import pyworld as pw
 
 
@@ -410,8 +409,29 @@ def load_state_dict(model, state_dict, strict=False):
 
 
 ckpt_step_patten = re.compile(r'(?<=-step\=)\d+')  # model-step=180000.ckpt
-
 _original_save_hp = LightningModule.save_hyperparameters
+
+
+def get_newest_checkpoint(ckpt_dir: Path, glob_pattern='*.ckpt') -> str|None:
+    '''
+    寻找并返回权重目录中step最大的权重以继续训练
+
+    :param ckpt_dir: 权重保存目录，一般为 exp/name
+    :type ckpt_dir: Path
+    :return: 找到的权重路径
+    :rtype: str|None
+    '''
+    ckpts = []
+    for p in ckpt_dir.rglob(glob_pattern):
+        if (m := ckpt_step_patten.search(p.name)) is None:
+            continue
+        ckpts.append((p, int(m.group(0))))
+    if len(ckpts) <= 0:
+        return None
+    # 按step从小到大排序，若权重是被去除了优化器等状态的优先级就降低
+    ckpts.sort(key=lambda x: x[1] - 0.5 * (x[0].stem.startswith('extracted')))
+    p, _ = ckpts[-1]
+    return p.as_posix()
 
 
 def safe_save_hyperparameters(self, *args, **kwargs):

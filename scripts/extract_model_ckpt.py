@@ -69,7 +69,7 @@ def extract_and_save(
       final_keys.add(key)
 
   if output_path is None:
-    output_path = input_path.with_stem('extracted')
+    output_path = input_path.with_stem(f'extracted-{input_path.stem}')
 
   extract_model_checkpoint(state_dict, output_path, final_keys)
 
