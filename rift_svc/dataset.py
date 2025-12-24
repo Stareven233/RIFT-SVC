@@ -26,6 +26,7 @@ class LazyTensorLoader:
 
 # pt_load = partial(torch.load, weights_only=True, map_location='cpu', mmap=True)
 def pt_load(path, key, loc='cpu', mmap=False):
+    # 小文件没必要开mmap
     p = path.with_suffix(f'.{key}.pt')
     return torch.load(p, weights_only=True, map_location=loc, mmap=mmap).squeeze(0)
 
@@ -91,10 +92,10 @@ class SVCDataset(Dataset):
         path = self.data_dir / spk / sample['file_name']
 
         spk_id = load('spk_id', lambda: torch.LongTensor([self.spk2idx[spk]]))  # [1]
-        mel = load('mel', lambda: pt_load(path, 'mel', mmap=True).T)
-        rms = load('rms', lambda: pt_load(path, 'rms', mmap=True))
-        f0 = load('f0', lambda: pt_load(path, 'f0', mmap=True))
-        cvec = load('cvec', lambda: pt_load(path, 'cvec', mmap=True))
+        mel = load('mel', lambda: pt_load(path, 'mel').T)
+        rms = load('rms', lambda: pt_load(path, 'rms'))
+        f0 = load('f0', lambda: pt_load(path, 'f0'))
+        cvec = load('cvec', lambda: pt_load(path, 'cvec'))
 
         frame_len = mel.shape[0]
         cvec = linear_interpolate_tensor(cvec, frame_len)
