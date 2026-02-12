@@ -3,12 +3,14 @@ http://music.163.com/song/media/outer/url?id=29753863.mp3
 
 cd D:\Code\projects\RIFT-SVC
 nvidia-smi
+$python = 'D:/Code/projects/Music-Source-Separation-Training/.venv/Scripts/python.exe'
 
-$name = "aino"
-$name = "「少女」"
-$name = "megumin"
+$name = 'aino'
+$name = 'megumin'
+$name = '「少女」'
+$name = 'fritia'
 $key=0
-$indir = "D:\Document\ai-sings"
+$indir = "D:\Document\ai-sings\届かない恋"
 $path = "$indir\God Knows\4K高清修复音源升级God Knows_Vocals_vocals_noreverb-new-au.flac"
 $path = "$indir\黄昏\黄昏_人声2.flac"
 $path = "$indir\銀の龍の背に乗って\骑在银龙的背上_vnV.flac"
@@ -17,19 +19,26 @@ $path = "$indir\虫儿飞\童声歌唱家冯晓菲奶声虫儿飞带你净化心
 $path = "$indir\最后一页\顾疚疚最后一页_Vocals_vocals.flac"
 $path = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals_noreverb.flac"
 $path2 = "$indir\Ending Note\Ending Note 門谷純_Vocals_vocals.flac"
-$path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb_「少女」_sov@5k_0vk_16.8k.flac"
 $path = "$indir\君は薔薇より美しい\布施明 君は薔薇より美しい 你比玫瑰更美丽_Vocals_vocals_noreverb.flac"
+$path = "$indir\君は薔薇より美しい\雨宫天君は薔薇より美しい_Vocals_vocals_noreverb_「少女」_sov@2k_0vk.flac"
+$path = "$indir\春庭雪\4k无损春庭雪橙翼_Vocals_vocals_noreverb_sov@fritia_23.19ks_8k_0vk.flac"
+$path = "$indir\新月的摇篮曲 (其一)  伴月同眠\哥伦比娅 伴月同眠 - 测试服废案_Vocals_vocals_noreverb.flac"
+$path = "$indir\ツキアカリのミチシルベ\4K 60FPS黑之契约者 流星的双子 stereopony月光的指引_Vocals_vocals_sov@megumin_59.20ks_0k_0vk.flac"
+$path = "${indir}/君は薔薇より美しい/君は薔薇より美しい_呼!_sov@「少女」_16.80ks_0k_0vk.flac"
+$path = "${indir}/届かない恋_au_sov@fritia_23.19ks_0k_0vk.flac"
 
-& uv run infer.py -n $name -i $path -bs 4 -k $key
-& uv run infer.py -m $model -i $path -s $name -bs 8 -k $key --infer-steps 32 --slicer-threshold -30 --robust-f0 1
-& uv run infer.py -m $model -i $path -s $name -bs 1 -k $key --infer-steps 32 --slicer-threshold -60 --slicer-min-length 5000 --slicer-min-interval 300
-& uv run infer.py -m $model -i $path -i $path2 -s $name -bs 1 -k $key --infer-steps 32
-& uv run infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.0 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
+& $python infer.py -n $name -i $path -bs 2 -k $key
+& $python infer.py -m $model -i $path -s $name -bs 8 -k $key --infer-steps 32 --slicer-threshold -30 --robust-f0 1
+& $python infer.py -m $model -i $path -s $name -bs 1 -k $key --infer-steps 32 --slicer-threshold -60 --slicer-min-length 5000 --slicer-min-interval 300
+& $python infer.py -m $model -i $path -i $path2 -s $name -bs 1 -k $key --infer-steps 32
+& $python infer.py -m ckpts/finetune_ckpt-v3_dit-768-12_30000steps-lr0.00005/model-step=30000.ckpt -i 0.wav -o 0_steps32_cfg0.wav -s speaker1 -k 0 --infer-steps 32 -bs 4 --ds-cfg-strength 0.0 --spk-cfg-strength 0.8 --skip-cfg-strength 0.0 --cfg-skip-layers 6 --cfg-rescale 0.7 --cvec-downsample-rate 2
 
-uv run scripts/extract_model_ckpt.py $model
+& $python scripts/extract_model_ckpt.py $model
 $src = "C:\!ext\CODE\Project\ComfyUI-aki-v1.7\ComfyUI\models\SEEDVR2\ema_vae_fp16.safetensors"
 $target = "D:\Code\SD models\ema_vae_fp16.safetensors"
 New-Item -ItemType SymbolicLink -Path $target -Target $src
+
+New-Item -ItemType SymbolicLink -Path C:\Users\Noe\AppData\Local\Programs\openscreen -Target D:\Software\openscreen
 '''
 import enum
 from pathlib import Path

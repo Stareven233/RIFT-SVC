@@ -15,8 +15,7 @@ from jaxtyping import Bool, Int
 from PIL import Image
 from lightning.pytorch import callbacks
 from lightning.pytorch import LightningModule
-import parselmouth as pm
-import pyworld as pw
+from numba import njit
 
 
 def seed_everything(seed: int = 0):
@@ -169,6 +168,8 @@ def post_process_f0(f0, sample_rate, hop_length, n_frames, silence_front=0.0, cu
     
 # pyworld
 def get_f0_pw(audio, sr, time_step, f0_min, f0_max):
+    import pyworld as pw
+
     pw_pre_f0, times = pw.dio(
         audio.astype(np.double), sr,
         f0_floor=f0_min, f0_ceil=f0_max,
@@ -180,6 +181,8 @@ def get_f0_pw(audio, sr, time_step, f0_min, f0_max):
 
 # parselmouth
 def get_f0_pm(audio, sr, time_step, f0_min, f0_max):
+    import parselmouth as pm
+
     pmac_pitch = pm.Sound(audio, sampling_frequency=sr).to_pitch_ac(
         time_step=time_step, voicing_threshold=0.6,
         pitch_floor=f0_min, pitch_ceiling=f0_max,
@@ -189,7 +192,6 @@ def get_f0_pm(audio, sr, time_step, f0_min, f0_max):
     pmac_f0 = slide_nanmedian(pmac_f0, 3)
     return pmac_f0
 
-from numba import njit
 @njit
 def slide_nanmedian(signals=np.array([]), win_length=3):
     """Filters a sequence, ignoring nan values

@@ -1,7 +1,6 @@
 import math
 from collections import defaultdict
 
-from schedulefree import AdamWScheduleFree
 from torch.optim import AdamW
 from omegaconf import DictConfig
 
@@ -71,6 +70,8 @@ def get_optimizer(model, optimizer_type, optimizer_params: DictConfig, global_st
 
     match optimizer_type:
         case 'adamwsf':
+            from schedulefree import AdamWScheduleFree
+
             optimizer = AdamWScheduleFree(optim_groups, betas=betas, warmup_steps=warmup_steps)
             scheduler = None
         case 'adamw':

@@ -2,8 +2,7 @@ r'''
 https://github.com/Pur1zumu/RIFT-SVC
 pip install torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu118
 cd D:\Code\projects\RIFT-SVC
-uv add pyworld
-uv add numpy==2.2.6
+$python = 'D:/Code/projects/Music-Source-Separation-Training/.venv/Scripts/python.exe'
 New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\rmvpe\model.pt" -Target "D:\Code\projects\DDSP-SVC\pretrain\rmvpe\model.pt"
 New-Item -ItemType SymbolicLink -Path "D:\Code\projects\RIFT-SVC\pretrained\vocoder" -Target "D:\Code\projects\DDSP-SVC\pretrain\vocoder"
 
@@ -14,28 +13,26 @@ $name='aino'
 $name='「少女」'
 
 1. 根据选择的数据文件里说话人子目录来决定有哪些说话人参与训练
-uv run scripts/resample_normalize_audios.py --src D:/Code/projects/so-vits-svc/data/「少女」 --dest data/$name
-uv run scripts/prepare_data_meta.py --data-dir data/$name --num-test 15
-uv run scripts/prepare_mel.py --data-dir data/$name --num-workers 0
-uv run scripts/prepare_rms.py --data-dir data/$name --num-workers 0
-uv run scripts/prepare_f0.py --data-dir data/$name --num-workers 0
-uv run scripts/prepare_cvec.py --data-dir data/$name --num-workers 0
+& $python scripts/resample_normalize_audios.py --src D:/Code/projects/so-vits-svc/data/「少女」 --dest data/$name
+& $python scripts/prepare_data_meta.py --data-dir data/$name --num-test 15
+& $python scripts/prepare_mel.py --data-dir data/$name --num-workers 0
+& $python scripts/prepare_rms.py --data-dir data/$name --num-workers 0
+& $python scripts/prepare_f0.py --data-dir data/$name --num-workers 0
+& $python scripts/prepare_cvec.py --data-dir data/$name --num-workers 0
 
 cd D:\Code\projects\RIFT-SVC
-$overrides = @("training.run_name=test","dataset.n_samples=20","training.max_steps=23","training.batch_size_per_gpu=2")
-$name = "fritia"
-$overrides = @("training.run_name='$name'","training.max_steps=2410","training.decay_step=600","training.test_per_steps=800", "dataset.lazy=True")
-$name = "aino"
-$overrides = @("training.run_name='$name'","training.max_steps=3600","training.decay_step=[500, 1200, 2200]","training.test_per_steps=500")
-$name = "「少女」"
-$overrides = @("training.run_name='$name'","training.max_steps=4010","training.decay_step=[600, 1200, 2300]","training.test_per_steps=500")
-$name = "megumin"
-$overrides = @("training.run_name='$name'-r5","training.max_steps=12100","training.decay_step=[2100, 6500, 12000, ]","training.test_per_steps=1000")
+training.run_name=test dataset.n_samples=20 training.max_steps=23 training.batch_size_per_gpu=2
+$name = "fritia" training.run_name='$name' training.max_steps=2410 training.decay_step=600 training.test_per_steps=800 dataset.lazy=True
+$name = "aino" training.run_name='$name' training.max_steps=3600 training.decay_step=[500, 1200, 2200] training.test_per_steps=500
+$name = "「少女」" training.run_name='$name' training.max_steps=4010 training.decay_step=[600, 1200, 2300] training.test_per_steps=500
+$name = "megumin" training.run_name='$name'-r5 training.max_steps=12100 training.decay_step=[2100, 6500, 12000, ] training.test_per_steps=1000
 
-uv run train.py name="'$name'" @overrides
-uv run train.py name="'$name'" @overrides training.resume_from_checkpoint="'ckpts/$name/model-step=485.ckpt'"
-uv run train.py name="'$name'" @overrides training.pretrained_path="'ckpts/${name}-r3/model-step=1059.ckpt'"
-uv run train.py name="'$name'" training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
+$base_config = "config/model/dit-base.yaml"
+$noe_config = "config/noe.yaml"
+& $python train.py -c $base_config -c $noe_config name=$name training.run_name=test dataset.n_samples=20 training.max_steps=23 training.batch_size_per_gpu=2
+& $python train.py name=$name @overrides training.resume_from_checkpoint="'ckpts/$name/model-step=485.ckpt'"
+& $python train.py name=$name @overrides training.pretrained_path="'ckpts/${name}-r3/model-step=1059.ckpt'"
+& $python train.py name=$name training.freeze_adaln_and_tembed=false training.drop_spk_prob=0.2 training.pretrained_path=pretrained/pretrain-v3_dit-768-12.ckpt
 
 Write-Host "等待10分钟..."
 Start-Sleep -Seconds 600
@@ -50,15 +47,16 @@ dataset转为iter类型，或者多倍，减少epoch交替时速度降低
 '''
 
 from pathlib import Path
-import hydra
+import argparse
+
 from lightning import Trainer
 from lightning.pytorch import seed_everything
 import torch
-from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch.callbacks import LearningRateMonitor
 from lightning.pytorch.loggers import WandbLogger, TensorBoardLogger
 from torch.utils.data import DataLoader
 from torch.utils.data import WeightedRandomSampler
+from omegaconf import DictConfig, OmegaConf
 from lightning.pytorch import LightningModule
 
 from rift_svc import DiT, RF
@@ -71,16 +69,72 @@ from rift_svc.utils import ckpt_step_patten
 from rift_svc.utils import safe_save_hyperparameters
 from rift_svc.utils import get_newest_checkpoint
 
+
 LightningModule.save_hyperparameters = safe_save_hyperparameters
 torch.set_float32_matmul_precision('high')
-# from omegaconf.base import ContainerMetadata
-# import typing
-# from collections import defaultdict
-# torch.serialization.add_safe_globals([DictConfig, ContainerMetadata, typing.Any, dict, defaultdict])
 
 
-@hydra.main(version_base=None, config_path='config', config_name='noe')
-def main(cfg: DictConfig):
+def parse_config():
+    """
+    解析命令行参数，支持：
+    1. 多个 --config 文件（按顺序合并，后覆盖前）
+    2. 无前缀的 key=value 覆盖（最高优先级）
+    3. 默认配置文件回退机制
+    
+    返回: 合并后的 OmegaConf 配置对象
+    """
+    parser = argparse.ArgumentParser(
+        description="Training script with multi-config support",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    
+    # 支持多次指定 --config，按顺序收集
+    parser.add_argument(
+        '-c', '--config',
+        type=str,
+        action='append',  # 关键：允许多次出现
+        help='Configuration file(s) - later files override earlier ones'
+    )
+    
+    # 位置参数：接收无 -- 前缀的覆盖（如 data.batch_size=64）
+    parser.add_argument(
+        'overrides',
+        nargs='*',
+        help='Command-line overrides in dotlist format (e.g., model.lr=0.01)'
+    )
+    
+    args = parser.parse_args()
+    
+    # === 配置加载逻辑 ===
+    # 1. 确定配置文件列表（支持无 --config 时的默认值）
+    config_files = args.config or ['config/model/dit-base.yaml']
+    
+    # 2. 按顺序加载并合并配置文件（后加载的覆盖先加载的）
+    cfg = OmegaConf.create()  # 空基础配置
+    for i, path in enumerate(config_files):
+        try:
+            new_cfg = OmegaConf.load(path)
+            cfg = OmegaConf.merge(cfg, new_cfg)
+            print(f"[Config] Loaded {path} (priority {i+1}/{len(config_files)})")
+        except Exception as e:
+            raise RuntimeError(f"Failed to load config {path}: {e}")
+    
+    # 3. 应用命令行覆盖（最高优先级）
+    if args.overrides:
+        try:
+            cli_conf = OmegaConf.from_dotlist(args.overrides)
+            cfg = OmegaConf.merge(cfg, cli_conf)
+            print(f"[Config] Applied CLI overrides: {args.overrides}")
+        except Exception as e:
+            raise RuntimeError(f"Invalid CLI overrides {args.overrides}: {e}")
+    
+    return cfg
+
+
+def main():
+    # 获取合并后的配置
+    cfg: DictConfig = parse_config()
+
     seed_everything(cfg.seed)
     run_name = cfg.training.run_name
     exp_dir = Path('exp', run_name)
@@ -225,6 +279,7 @@ def main(cfg: DictConfig):
         ),
         ckpt_path=resume_ckpt,
     )
+
 
 if __name__ == "__main__":
     main()

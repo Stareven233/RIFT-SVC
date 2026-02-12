@@ -1,10 +1,10 @@
 seed: 233
 name: megumin
 
-defaults:
-  - _self_
-  # 将dit-base指定的值放到 model 键下面
-  - model: dit-base
+# defaults:
+#   - _self_
+#   # 将dit-base指定的值放到 model 键下面
+#   - model: dit-base
 
 dataset:
   data_dir: data/${name}
