@@ -8,7 +8,7 @@ name: megumin
 
 dataset:
   data_dir: data/${name}
-  meta_info_path: data/${name}/meta_info.json
+  # meta_info_path: data/${name}/meta_info.json
   n_samples: ~
   max_frame_len: 256
   # 是否懒加载数据，False则会在启动训练时将所有数据加载到内存
@@ -16,11 +16,8 @@ dataset:
 
 vocoder:
   type: nsf-hifigan
-  ckpt: pretrained/vocoder/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt
-
-model:
-  dim: 512
-  depth: 8
+  ckpt: pretrained/vocoder/nsf_hifigan_44.1k_hop512_128bin_2024.02/model.ckpt
+  # ckpt: pretrained/vocoder/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt
 
 training:
   run_name: test
@@ -46,11 +43,10 @@ training:
   log_media_per_steps: ${training.test_per_steps}
   # 为空时若训练目录有历史权重，则会找最新的一个加载
   resume_from_checkpoint: ~
-  pretrained_path: pretrained/pretrain-v3_dit-512-8.ckpt
   save_weights_only: false
   # save_weights_only: true
   save_on_interruption: true
-  freeze_adaln_and_tembed: false
+  freeze_adaln_and_tembed: true
   eval_sample_steps: 32
   drop_spk_prob: 0.0
   time_schedule: lognorm

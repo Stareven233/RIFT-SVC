@@ -61,6 +61,9 @@ def get_optimizer(model, optimizer_type, optimizer_params: DictConfig, global_st
     warmup_ratio = optimizer_params.warmup_ratio or 0.05
     warmup_steps = int(max_steps * warmup_ratio)
     decay_step = optimizer_params.decay_step
+    if isinstance(decay_step, int):
+        decay_step = (decay_step, )
+        print(f'transform decay_step (int) to tuple[int]')
     decay_rate = optimizer_params.decay_rate or 0.5
     anneal_ratio = optimizer_params.anneal_ratio or 0.2
     if global_step != -1:

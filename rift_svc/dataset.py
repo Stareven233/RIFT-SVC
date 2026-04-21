@@ -35,7 +35,7 @@ class SVCDataset(Dataset):
     def __init__(
         self,
         data_dir: str,
-        meta_info_path: str,
+        meta_info_path: str=None,
         max_frame_len = 256,
         split = "train",
         use_cvec_downsampled: bool = False,
@@ -46,6 +46,8 @@ class SVCDataset(Dataset):
         self.data_dir = Path(data_dir)
         self.max_frame_len = max_frame_len
 
+        if not meta_info_path:
+            meta_info_path = self.data_dir / 'meta_info.json'
         with open(meta_info_path, 'r', encoding='utf-8') as f:
             meta = json.load(f)
         

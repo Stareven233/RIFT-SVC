@@ -34,3 +34,4 @@ training:
   time_schedule: "lognorm"
   # Logger options
   logger: "wandb"  # Options: "wandb" or "tensorboard"
+  

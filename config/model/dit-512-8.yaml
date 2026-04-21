@@ -1,6 +1,10 @@
-defaults:
-  - _self_
-  - dit-base
+# defaults:
+#   - _self_
+#   - dit-base
 
-dim: 512
-depth: 8
+model:
+  dim: 512
+  depth: 8
+
+training:
+  pretrained_path: pretrain-v3_dit-512-8.ckpt

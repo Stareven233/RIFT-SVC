@@ -41,7 +41,6 @@ cd D:\Code\projects\RIFT-SVC
 
 #todo
 增加epoch设置，对不同大小的数据集比较友好
-改造配置读取方式，模糊掉 name 的输入
 dataset转为iter类型，或者多倍，减少epoch交替时速度降低
 音区偏移
 '''
@@ -167,6 +166,20 @@ def main():
         )
     else:
         raise ValueError(f"Invalid logger type: {logger_type}")
+    
+    train_dataset = SVCDataset(**cfg.dataset, split='train')
+    val_dataset = SVCDataset(**cfg.dataset, split='test')
+    transformer = DiT(
+        **cfg.model,
+        num_speaker=train_dataset.num_speakers,
+    )
+    rf = RF(
+        transformer=transformer,
+        time_schedule=cfg.training.time_schedule,
+    )
+    OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
+    # Actually, there's no need to store this, as a copy exists in ckpt['hyper_parameters']['cfg']
+    OmegaConf.save(cfg, exp_dir / 'config.yaml', resolve=True)
 
     # Load pretrained weights if specified
     resume_ckpt = cfg.training.get('resume_from_checkpoint', None) or get_newest_checkpoint(exp_dir)
@@ -183,21 +196,6 @@ def main():
             print(f"Missing keys: {missing_keys}")
         if unexpected_keys:
             print(f"Unexpected keys: {unexpected_keys}")
-    
-    train_dataset = SVCDataset(**cfg.dataset, split='train')
-    val_dataset = SVCDataset(**cfg.dataset, split='test')
-    transformer = DiT(
-        **cfg.model,
-        num_speaker=train_dataset.num_speakers,
-    )
-    rf = RF(
-        transformer=transformer,
-        time_schedule=cfg.training.time_schedule,
-    )
-    OmegaConf.update(cfg, 'spk2idx', train_dataset.spk2idx, force_add=True)
-    # Actually, there's no need to store this, as a copy exists in ckpt['hyper_parameters']['cfg']
-    OmegaConf.save(cfg, exp_dir / 'config.yaml', resolve=True)
-
     if cfg.training.get('lora_training', False):
         rf.transformer.apply_lora(cfg.training.lora_rank, cfg.training.lora_alpha)
     if cfg.training.get('freeze_adaln_and_tembed', True):
